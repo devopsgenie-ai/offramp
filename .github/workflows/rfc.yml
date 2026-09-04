@@ -1,0 +1,52 @@
+name: rfc
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate RFC frontmatter
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install pyyaml
+      - run: python scripts/check_rfcs.py validate
+
+  gate:
+    name: RFC gate
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install pyyaml
+
+      - name: Collect changed paths
+        run: |
+          git fetch --no-tags --depth=1 origin "$BASE_REF"
+          git diff --name-only "origin/$BASE_REF"...HEAD > /tmp/changed.txt
+          cat /tmp/changed.txt
+        env:
+          BASE_REF: ${{ github.base_ref }}
+
+      # The body is passed through the environment, never interpolated into the
+      # script, so its contents cannot be executed as shell.
+      - name: Capture pull-request body
+        run: printf '%s' "$PR_BODY" > /tmp/body.txt
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+
+      - name: Enforce gate
+        run: python scripts/check_rfcs.py gate --changed /tmp/changed.txt --body-file /tmp/body.txt
