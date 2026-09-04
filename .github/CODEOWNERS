@@ -1,0 +1,12 @@
+# Every change needs a review from a maintainer. Enforced by the ruleset on `main`,
+# which requires code-owner approval before merge.
+* @ishantdeep-hue
+
+# Process and security surfaces — changing these changes the rules everything else
+# is held to, so they are called out explicitly rather than inherited from the glob.
+/AGENTS.md            @ishantdeep-hue
+/SECURITY.md          @ishantdeep-hue
+/CODE_OF_CONDUCT.md   @ishantdeep-hue
+/rfcs/                @ishantdeep-hue
+/scripts/             @ishantdeep-hue
+/.github/             @ishantdeep-hue
