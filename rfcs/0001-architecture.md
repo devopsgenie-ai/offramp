@@ -59,15 +59,28 @@ generation.
 
 Five deterministic scripts and one model-produced artifact between them.
 
+```mermaid
+flowchart TD
+    repo[/"repository"/] --> scan[["scan"]]
+    answers[("answers.yaml")] --> scan
+    scan --> spec[/"AppSpec"/]
+    scan --> gaps[/"gaps"/]
+    spec --> render[["render"]]
+    render --> tree[/"output tree"/]
+    tree --> verify[["verify"]]
+    verify -.->|"re-derive and diff"| tree
+    gaps --> model{{"model"}}
+    model --> plan[/"plan"/]
+    plan --> show[["show"]]
+    show --> human(["human reviews"])
+    human -->|"accepted entries"| apply[["apply"]]
+    apply --> answers
 ```
-  repository ─▶ scan ─▶ AppSpec + gaps ─▶ render ─▶ output tree ─▶ verify
-                 ▲            │                          ▲            │
-                 │            ▼                          └────────────┘
-          answers.yaml ◀── apply ◀── plan ─▶ show ─▶ human      re-derive and diff
-           (persisted)    (script)  (data)  (script)  reviews
-                                       ▲
-                                     model
-```
+
+Double-bordered boxes are scripts and parallelograms are the artifacts between them. The
+cylinder is the one file committed to the user's repository, and the hexagon is the only
+step a model performs — everything reachable from `AppSpec` to the output tree is
+deterministic.
 
 `scan`, `show`, `apply`, `render` and `verify` are pure functions with golden tests. `plan` is the
 only artifact a model produces, it is typed and schema-validated, and it is data rather

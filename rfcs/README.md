@@ -18,12 +18,13 @@ leaves a record of why.
 
 ## Lifecycle
 
-```
-draft ──▶ review ──▶ accepted ──▶ implemented
-             │
-             └────▶ rejected
-
-accepted ──▶ superseded   (by a later RFC)
+```mermaid
+flowchart LR
+    draft["draft"] --> review["review"]
+    review --> accepted["accepted"]
+    review --> rejected["rejected"]
+    accepted --> implemented["implemented"]
+    accepted -->|"by a later RFC"| superseded["superseded"]
 ```
 
 | Status | Meaning |
