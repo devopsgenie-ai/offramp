@@ -14,8 +14,10 @@ When the tool does not know something, it records a gap instead of guessing.
 **No implementation lands without an accepted RFC.** This is enforced in CI, not just by
 convention — see `scripts/check_rfcs.py` and `.github/workflows/rfc.yml`.
 
-- A change to `src/`, `schemas/`, or `templates/` MUST reference an RFC with
+- A change to `src/`, `schemas/`, `templates/` or `skills/` MUST reference an RFC with
   `status: accepted` in its pull-request body, as `RFC-0001` (four digits).
+- Everything under `skills/` is program text, its Markdown included. `SKILL.md` instructs
+  the model and is not documentation, so the `.md` exemption below does not reach it.
 - Changes to docs, tests for existing behaviour, CI, typo fixes and dependency bumps do
   not need an RFC.
 - If you are unsure whether your change needs one, it needs one. Write it; RFCs are
@@ -60,6 +62,14 @@ Detectors and renderers are pure functions.
 - Iterate collections in sorted order. Serialise mappings with stable key order.
 - All I/O happens at the edges — reading the source repo, writing the output tree. The
   middle is data in, data out.
+- `apply` is a pure function as well:
+  `(appspec, plan, answers, accepted_resolves, accepted_overrides, now) -> answers'`.
+  The clock is an argument supplied at the edge, never read inside.
+- **No model calls.** A detector or renderer that asks an LLM is not a pure function, and
+  it would need network access and an API key to produce output — both already forbidden
+  by the declarative constraint above. Judgement comes from an agent *outside* the tool,
+  which resolves gaps and writes answers back into the AppSpec. `offramp` is called by a
+  model; it never calls one.
 
 Determinism is not stylistic. It is the precondition for golden-file tests, and those are
 the only way we can measure whether the tool is getting better.
@@ -75,6 +85,9 @@ output.
 - When a detector finds a literal credential in the source, record it as a gap with high
   severity so the human is told, and never carry the value forward.
 - Never write a secret value into a fixture, a test, a log line, or an error message.
+- **Never into the answers file.** It is committed to the user's repository. `apply` rejects
+  any entry targeting an `EnvVar` whose `source` is `secret`. An answer may say where a
+  secret comes from; never what it is.
 
 ## 5. Gaps over guesses
 
@@ -98,6 +111,9 @@ Use these terms precisely; they are the shared language of the codebase and the 
 | **Target** | Where config is being generated for, e.g. Kubernetes, Terraform/AWS. |
 | **Gap** | Something the tool could not determine, typed and reported. |
 | **Fixture** | A checked-in sample app used as a golden test input. |
+| **Plan** | A typed, schema-validated changeset proposing AppSpec values. Data, never an action — the model's only output. |
+| **Answers file** | The accumulated, human-accepted result of applied plans, committed to the app repository. A deterministic input to `scan`. |
+| **Skill** | The distribution surface: an instruction file that orchestrates, plus scripts that decide. |
 
 Detectors never write files. Renderers never read the source repository. If you find
 yourself wanting to break either rule, the AppSpec is missing a field.
@@ -125,4 +141,4 @@ ROADMAP.md     what we intend to build, in order
 ```
 
 What will exist once RFC-0001 is accepted is described in that RFC. Do not create
-`src/` before then.
+`src/`, `schemas/`, `templates/` or `skills/` before then.

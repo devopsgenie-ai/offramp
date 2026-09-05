@@ -40,6 +40,10 @@ GATED_PREFIXES = ("src/", "schemas/", "templates/")
 # Changes confined to these never require one, even under a gated prefix.
 EXEMPT_SUFFIXES = (".md", ".txt")
 
+# Gated with no suffix exemption at all. Everything under skills/ is program text, its
+# Markdown included: SKILL.md instructs the model and is not documentation.
+GATED_ALWAYS = ("skills/",)
+
 
 def _split_frontmatter(text: str, path: Path) -> dict:
     if not text.startswith("---\n"):
@@ -167,7 +171,8 @@ def cmd_gate(changed_arg: str, body_file: str | None) -> int:
     gated = [
         path
         for path in changed
-        if path.startswith(GATED_PREFIXES) and not path.endswith(EXEMPT_SUFFIXES)
+        if path.startswith(GATED_ALWAYS)
+        or (path.startswith(GATED_PREFIXES) and not path.endswith(EXEMPT_SUFFIXES))
     ]
     if not gated:
         print("no gated paths changed; RFC not required")
