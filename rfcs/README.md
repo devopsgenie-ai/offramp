@@ -94,4 +94,4 @@ Every RFC begins with YAML frontmatter. `scripts/check_rfcs.py` validates it.
 
 | RFC | Title | Status |
 |---|---|---|
-| [0001](0001-architecture.md) | Architecture: detectors, AppSpec, plan and apply, renderers, gaps | draft |
+| [0001](0001-architecture.md) | Architecture: detectors, AppSpec, plan and apply, renderers, gaps | review |

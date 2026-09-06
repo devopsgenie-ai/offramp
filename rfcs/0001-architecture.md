@@ -1,10 +1,10 @@
 ---
 rfc: 0001
 title: "Architecture: detectors, AppSpec, plan and apply, renderers, gaps"
-status: draft
+status: review
 authors: [ishantdeep-hue]
 created: 2026-09-05
-updated: 2026-09-05
+updated: 2026-09-06
 ---
 
 > Establishes the core architecture: deterministic scripts that read an application
