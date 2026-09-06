@@ -185,9 +185,22 @@ Gap
 addressing convenience, recomputed on every scan, and nothing may persist it — array
 indices are a function of detector output, not of application identity.
 
+A credential found committed in the source repository is a gap of its own, and it carries
+one instruction the others do not: **rotate it before cutover, naming the key and the file it
+was found in.** This is not a rare case. Of 100 sampled Emergent repositories 27 commit a
+working `.env` — the platform's own `.gitignore` has a section headed "Environment files"
+that contains no `.env` pattern — and Lovable writes its Supabase URL and key as string
+literals into a generated client file. The tool does not refuse to run: the user already has
+the problem, and refusing would exclude roughly a third of the population it exists to serve.
+But it reads the credential, generates configuration around it, and would otherwise say
+nothing — and a migration is the one moment when rotating is natural, because the database is
+moving anyway.
+
 Gaps are the product, not an admission of failure. They are emitted as JSON for machines
-and rendered into the human runbook. A `blocking` gap means the output will not work until
-a human answers.
+and rendered for a human to read. A `blocking` gap means the output will not work until a
+human answers. Until the generated runbook exists — deferred past v1 — the gap report is the
+only place the non-declarative work is described, which raises the bar on how a gap is
+worded: it has to be enough for someone to act on alone.
 
 ### Plan — the model's only output
 
@@ -367,8 +380,9 @@ is the database itself, which is the only thing the user has not decided. A pod 
 before the decision is made fails with `secret "..." not found`, which names the missing
 input, rather than with a DNS timeout against a Service that was never going to exist.
 
-The gap states what each mode would require, and the generated runbook carries the steps for
-whichever is chosen.
+The gap states what each mode would require and what the user must do for whichever they
+choose. Once the generated runbook exists those steps move into it; in v1 the gap carries
+them.
 
 ### Verify — and why the output tree is not honour-system
 
@@ -393,6 +407,12 @@ conflict instead of destroying a user's hand edits on the second run.
 `verify` lands in the same change as the first renderer — it cannot be tested before
 something renders — and must be green before a second renderer, before `apply`, and before
 the skill.
+
+**The skill runs it as its mandatory last step.** That is the whole enforcement story for
+v1: no emitted CI workflow, no git hook, nothing installed in the user's repository. A user's
+own hand edits are protected by a different mechanism — `render` refuses to overwrite a file
+whose on-disk hash no longer matches the manifest — so `verify` only has to police the actor
+that could otherwise finish a session with an unexplained output tree, which is the model.
 
 ### Surfaces
 
@@ -451,9 +471,18 @@ it improves the first.
 
 ### Scope of the first implementation
 
-- **One scenario:** a full-stack app with a Python API, a static JavaScript frontend, and a
-  document database — the common shape produced by current app-generation platforms.
-- **One target:** Kubernetes via Kustomize and GitOps.
+- **One scenario:** Emergent — a FastAPI backend, a Create React App frontend, and MongoDB.
+  This is *not* the common shape. Surveying 200+ generated repositories, the modal output of
+  an app-building platform is a Vite/React single-page app with **no backend in the
+  repository at all**, reaching a hosted Supabase; that is Lovable, Bolt and Base44. Emergent
+  is the only platform in the set that emits a Python service and a document database, and it
+  is first precisely because it is the shape where generating this output is worth doing —
+  there is a service to containerise and an ingress to express.
+- **One target:** Kubernetes via Kustomize and GitOps. The honest reason is capability
+  rather than demand: it is what the maintainers have already solved. A solo founder leaving
+  a hosted platform for a data-residency requirement did not ask for GitOps, and later
+  targets — Compose, a single-host profile — are likely to suit them better. Naming that now
+  keeps a reviewer from inferring a user need that has not been demonstrated.
 - **One environment**, `production`, emitted through the full overlay mechanism rather than
   around it, so that adding `staging` later is additive instead of structural. This makes the
   `binding: build_arg` promotion problem moot rather than solved: with one environment the
@@ -464,6 +493,16 @@ it improves the first.
   them silently is the failure this note exists to prevent.
 - **Greenfield only:** the user has no existing deployment repository, so the tool scaffolds
   one from an opinionated default.
+- **Manifests and scaffolding only.** The generated runbook is deferred. v1 emits
+  configuration and a gap report; the imperative work stays the user's, described by the
+  gaps rather than by a separate document.
+- **`kind: resolve` only.** The plan model above is specified in full, but v1 neither emits
+  nor accepts `kind: override`. A model that relays a human's answer to a question the tool
+  already asked cannot make correct output wrong; a model that overrules a confident detector
+  can. Shipping the second requires evidence that detectors are wrong often enough to justify
+  it, and that evidence is a gap count from real runs, which does not exist yet.
+- **Distribution is clone-and-point.** The skill lives at `skills/offramp/`; there is no
+  registry and no install step.
 - **Python**, because the first scenario's applications are Python and the ecosystem overlap
   makes detectors easier to write and verify.
 - **Build order:** `scan` first; then the first renderer and its manifest, with `verify` in
@@ -579,8 +618,21 @@ gaps fails CI unless the authorising RFC says why.
 **CI runs no model.** Everything above executes with no API key present. Plan handling is
 tested against checked-in plan fixtures, not generated ones.
 
-**Fixtures must be synthetic or explicitly licensed.** No customer repository, and no
-credential, hostname or account identifier — not even an expired one.
+**Fixtures are generated by the maintainers, not vendored.** Exports are produced on the
+platform's own free tier and scrubbed before they are checked in, which gives real output
+with unambiguous rights and allows the awkward shapes to be made deliberately — an app with a
+worker, one with no health endpoint, one with a committed `.env`. Vendoring public
+repositories is not viable: 74% of Emergent repositories and 94% of Lovable ones carry no
+licence at all, and pristine exports and permissive licences turn out to be nearly disjoint.
+
+**The recall corpus is referenced, never copied.** Detector hit rates are measured by running
+against public repositories that are not checked in and not redistributed, reported in
+aggregate. This gives real-world coverage numbers without a licensing exposure, and it is the
+only way to learn that a detector matches 90% of what exists rather than 100% of what we
+thought to write down.
+
+No customer repository, and no credential, hostname or account identifier in a fixture — not
+even an expired one.
 
 ## Declarative constraint
 

@@ -37,11 +37,15 @@ to us as much as to anyone.
 | **More targets** | Docker Compose and a single-host profile for people who do not want Kubernetes; Nomad; managed container services. |
 | **Compliance evidence** | A signed manifest per run — what moved, where it landed, region and residency, image digests, how secrets were handled. One evidence model with pluggable mappings, rather than separate implementations per regime. Residency is the part that is a genuine product capability rather than paperwork. |
 | **TypeScript implementation** | The AppSpec is language-neutral by design. A TS port would make `npx` distribution possible and fit the agent-tooling ecosystem. Only worth doing once the schema is stable. |
-| **Data migration execution** | Currently and deliberately a runbook. Executing it is the highest-blast-radius thing this tool could ever do; it requires the verification work above to exist first. |
 
 ## Explicitly not planned
 
 - Holding cloud credentials or mutating running infrastructure. This is the line the
-  project is built around.
+  project is built around, and it is permanent. Executing a migration rather than writing
+  it into a runbook is on the far side of that line, so it is not on this roadmap at any
+  horizon — not as a later item, not behind a flag.
+- Favouring a DevOps Genie product in generated output. No release will propose one as a
+  default or a preferred option, and any DevOps Genie target ships as one renderer among
+  peers. `offramp` does not hold your credentials and does not steer you.
 - Becoming a deployment platform, a CI system, or a Kubernetes distribution.
 - Supporting proprietary formats we cannot test against openly.

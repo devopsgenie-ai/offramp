@@ -83,7 +83,10 @@ output.
 - Emit a **reference** — an `ExternalSecret`, a `secretKeyRef`, a Terraform data source —
   and record the required key in the gap report.
 - When a detector finds a literal credential in the source, record it as a gap with high
-  severity so the human is told, and never carry the value forward.
+  severity so the human is told, and never carry the value forward. That gap MUST tell the
+  user to **rotate the credential before cutover**, naming the key and the file it was found
+  in. Committed credentials are the normal case in these repositories, not the exception, and
+  a migration is the moment when rotating costs least.
 - Never write a secret value into a fixture, a test, a log line, or an error message.
 - **Never into the answers file.** It is committed to the user's repository. `apply` rejects
   any entry targeting an `EnvVar` whose `source` is `secret`. An answer may say where a

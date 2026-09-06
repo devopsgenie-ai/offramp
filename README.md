@@ -40,7 +40,10 @@ definition, and no way to run it anywhere else. Teams hit this wall for ordinary
 reasons — cost at scale, or a compliance requirement that data live somewhere specific.
 
 Getting out is a week of undifferentiated work that every team does from scratch.
-`offramp` is that week, automated and inspectable.
+`offramp` automates the part of that week nobody should be writing by hand — the
+containers, the manifests, the GitOps wiring — and tells you plainly what it could not
+work out. It does not provision your cluster, move your data, or cut your DNS over. Those
+are yours, and the tool is explicit about which is which.
 
 ## Design principles
 
@@ -54,6 +57,19 @@ Getting out is a week of undifferentiated work that every team does from scratch
 4. **Agent-friendly, not agent-dependent.** It runs standalone on a laptop or in CI, and
    exposes the same operations to a coding agent so an agent can resolve gaps
    conversationally. The reasoning is optional; the generation is not.
+
+## Using it
+
+Not yet — see the status note above; `skills/` does not exist until RFC-0001 is accepted.
+When it does, the install path is this:
+
+Clone the repository and point your coding agent at `skills/offramp/`. There is no
+registry to install from and no account to create — the skill is a directory of
+instructions and scripts, and the scripts run on their own if you would rather not use an
+agent at all.
+
+That is deliberate. A tool whose purpose is getting you off a platform should not make
+its own distribution depend on one.
 
 ## Contributing
 
