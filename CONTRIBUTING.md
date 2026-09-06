@@ -35,12 +35,21 @@ Comment on [RFC-0001](rfcs/0001-architecture.md). Specifically:
 3. Run `make check`.
 4. Open a pull request. The template asks which RFC authorises it.
 
-## Fixtures
+## Fixtures and the recall corpus
 
-Sample applications used as test inputs must be **synthetic, or code you have the right
-to redistribute under MIT**. Do not contribute a fixture derived from a private or
-customer repository, and never include a real credential, hostname or account identifier
-— not even an expired one.
+These are two different things and the rules differ.
+
+**Fixtures are checked in.** They must be **synthetic, or code you have the right to
+redistribute under MIT** — in practice, an app you generated yourself on the platform's free
+tier and then scrubbed. Do not contribute a fixture derived from a private or customer
+repository, and never include a real credential, hostname or account identifier — not even an
+expired one. Note that these platforms frequently commit live `.env` files, so assume your own
+export contains one until you have checked.
+
+**The recall corpus is referenced, never copied.** Detector hit rates are measured against
+public repositories that stay where they are. Contribute a query or an identifier, never the
+code — most of these repositories carry no licence, and an unlicensed repository is not
+redistributable regardless of how public it is.
 
 ## Reporting something sensitive
 
