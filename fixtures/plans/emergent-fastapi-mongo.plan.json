@@ -1,0 +1,277 @@
+{
+  "_note": "SPIKE. A checked-in plan fixture, as RFC-0001's Testing section requires: 'Plan handling is tested against checked-in plan fixtures, not generated ones.' A model would have produced this; nothing here was. basis.content_sha256 is stamped from the live scan by scripts/spike_check.sh, because it changes whenever the AppSpec does -- which is the point of a basis. Every value is synthetic: example.com is reserved for documentation and names no real host or account.",
+  "basis": {
+    "content_sha256": "STAMPED-BY-SPIKE-CHECK",
+    "repo_commit": null,
+    "detectors_version": "spike-2"
+  },
+  "entries": [
+    {
+      "target": "app.name",
+      "kind": "resolve",
+      "current": null,
+      "proposed": "status-board",
+      "rationale": "The repository has no git remote, so nothing states a name. The app is a status board: the backend stores status checks and the frontend lists them. This name goes into every label, the namespace, the Ingress and the ArgoCD application, so it is worth getting right once.",
+      "evidence": [
+        "backend/server.py:35",
+        "frontend/src/App.js:32"
+      ],
+      "confidence": "medium"
+    },
+    {
+      "target": "route.host",
+      "kind": "resolve",
+      "current": null,
+      "proposed": "status-board.example.com",
+      "rationale": "One hostname serves both routes: the frontend at / and the API at /api. Answering this first is what makes the frontend's baked API base answerable, because the two are the same origin.",
+      "evidence": [],
+      "confidence": "high"
+    },
+    {
+      "target": "service.frontend.env.REACT_APP_BACKEND_URL.value",
+      "kind": "resolve",
+      "current": null,
+      "proposed": "",
+      "rationale": "The bundle computes its API base as `${REACT_APP_BACKEND_URL}/api`. With the frontend and the API on one hostname, the empty string makes that a same-origin /api call, which works on any host the bundle is served from and needs no rebuild if the hostname later changes.",
+      "evidence": [
+        "frontend/src/App.js:5"
+      ],
+      "confidence": "high"
+    },
+    {
+      "target": "datastore.mongodb.mode",
+      "kind": "resolve",
+      "current": null,
+      "proposed": "managed",
+      "rationale": "A team leaving a hosted platform for a compliance requirement is not usually looking to start operating a database. Managed keeps backups and failover someone else's problem, and it makes the version question moot.",
+      "evidence": [
+        "backend/requirements.txt:3"
+      ],
+      "confidence": "medium"
+    },
+    {
+      "target": "delivery.image_registry",
+      "kind": "resolve",
+      "current": null,
+      "proposed": "registry.example.com/example-org",
+      "rationale": "Where the built images are pushed. The overlay's image transform is unusable until this is a real path.",
+      "evidence": [],
+      "confidence": "high"
+    },
+    {
+      "target": "delivery.gitops_repo_url",
+      "kind": "resolve",
+      "current": null,
+      "proposed": "https://git.example.com/example-org/status-board.git",
+      "rationale": "The generated tree is rooted in the application repository, because the Dockerfiles have to COPY application source. So ArgoCD watches that same repository.",
+      "evidence": [],
+      "confidence": "high"
+    },
+    {
+      "target": "delivery.ingress_class",
+      "kind": "resolve",
+      "current": null,
+      "proposed": "nginx",
+      "rationale": "ingress-nginx is the most common controller and the one the generated path rules assume when they order /api before /.",
+      "evidence": [],
+      "confidence": "medium"
+    },
+    {
+      "target": "delivery.image_tag",
+      "kind": "resolve",
+      "current": null,
+      "proposed": "unbuilt",
+      "rationale": "A placeholder for the first render only. The build pipeline answers this for real on every push, with the commit SHA, via apply --accepted-by ci; see .offramp/README.md. An immutable tag is also what makes the generated imagePullPolicy: IfNotPresent safe.",
+      "evidence": [],
+      "confidence": "high"
+    },
+    {
+      "target": "environment.production.namespace",
+      "kind": "resolve",
+      "current": null,
+      "proposed": "status-board-production",
+      "rationale": "The derived default, made explicit now that the app has a name.",
+      "evidence": [],
+      "confidence": "high"
+    },
+    {
+      "target": "service.backend.runtime.version",
+      "kind": "resolve",
+      "current": null,
+      "proposed": "3.11",
+      "rationale": "The Emergent base image name encodes no Python version. 3.11 is what the platform's FastAPI images shipped and what the pinned dependency set resolves against.",
+      "evidence": [
+        "backend/requirements.txt:1"
+      ],
+      "confidence": "medium"
+    },
+    {
+      "target": "service.frontend.runtime.version",
+      "kind": "resolve",
+      "current": null,
+      "proposed": "20",
+      "rationale": "react-scripts 5.0.1 and craco 7.1.0 both support Node 20, which is the current LTS.",
+      "evidence": [
+        "frontend/package.json:1"
+      ],
+      "confidence": "medium"
+    },
+    {
+      "target": "service.backend.resources",
+      "kind": "resolve",
+      "current": {
+        "limits": {
+          "cpu": "500m",
+          "memory": "512Mi"
+        },
+        "requests": {
+          "cpu": "100m",
+          "memory": "256Mi"
+        }
+      },
+      "proposed": {
+        "limits": {
+          "cpu": "1",
+          "memory": "512Mi"
+        },
+        "requests": {
+          "cpu": "100m",
+          "memory": "256Mi"
+        }
+      },
+      "rationale": "Requests kept; the CPU limit raised to a full core so a burst of requests queues rather than being throttled. Memory is unchanged because a wrong memory limit kills the pod and a wrong CPU limit only slows it.",
+      "evidence": [],
+      "confidence": "low"
+    },
+    {
+      "target": "service.frontend.resources",
+      "kind": "resolve",
+      "current": {
+        "limits": {
+          "cpu": "200m",
+          "memory": "128Mi"
+        },
+        "requests": {
+          "cpu": "25m",
+          "memory": "64Mi"
+        }
+      },
+      "proposed": {
+        "limits": {
+          "cpu": "200m",
+          "memory": "128Mi"
+        },
+        "requests": {
+          "cpu": "25m",
+          "memory": "64Mi"
+        }
+      },
+      "rationale": "Accepted as generated. nginx serving a few hundred kilobytes of static files does not need more.",
+      "evidence": [],
+      "confidence": "medium"
+    },
+    {
+      "target": "service.backend.replicas",
+      "kind": "resolve",
+      "current": 1,
+      "proposed": 2,
+      "rationale": "Two, so a rolling deploy or a node drain is not an outage. The service holds no local state.",
+      "evidence": [],
+      "confidence": "high"
+    },
+    {
+      "target": "service.frontend.replicas",
+      "kind": "resolve",
+      "current": 1,
+      "proposed": 2,
+      "rationale": "Same reasoning; static content, trivially replicable.",
+      "evidence": [],
+      "confidence": "high"
+    },
+    {
+      "target": "secret.backend.env.MONGO_URL",
+      "kind": "resolve",
+      "current": null,
+      "proposed": null,
+      "rationale": "Acknowledged: the committed credential is rotated and the new value exists only in the cluster Secret. Nothing is recorded here but the acknowledgement -- an answer may say where a secret comes from, never what it is.",
+      "evidence": [
+        "backend/.env:1"
+      ],
+      "confidence": "high"
+    },
+    {
+      "target": "service.backend.build.pinning",
+      "kind": "resolve",
+      "current": null,
+      "proposed": null,
+      "rationale": "Acknowledged: the transitive dependency set is frozen. This is the gap the spike found by building the image and watching it die on `import server` -- motor was pinned and pymongo was not.",
+      "evidence": [
+        "backend/requirements.txt:1"
+      ],
+      "confidence": "high"
+    },
+    {
+      "target": "service.frontend.build.lockfile",
+      "kind": "resolve",
+      "current": null,
+      "proposed": null,
+      "rationale": "Acknowledged: yarn.lock is generated and committed, so two builds of one commit install the same tree.",
+      "evidence": [
+        "frontend/package.json:1"
+      ],
+      "confidence": "high"
+    },
+    {
+      "target": "service.backend.env.CORS_ORIGINS.unused",
+      "kind": "resolve",
+      "current": null,
+      "proposed": null,
+      "rationale": "Acknowledged: dropped. server.py hardcodes allow_origins=[\"*\"] and never reads CORS_ORIGINS, so carrying it over would preserve a setting that has never had an effect.",
+      "evidence": [
+        "backend/.env:3"
+      ],
+      "confidence": "high"
+    },
+    {
+      "target": "service.frontend.ports",
+      "kind": "resolve",
+      "current": [],
+      "proposed": [
+        8080
+      ],
+      "rationale": "Accepted as generated. 8080 lets the container run unprivileged, which is why the nginx-unprivileged image was chosen; nothing in the cluster expects a different port.",
+      "evidence": [
+        "frontend/package.json:1"
+      ],
+      "confidence": "high"
+    },
+    {
+      "target": "service.frontend.probes",
+      "kind": "resolve",
+      "current": [],
+      "proposed": [
+        {
+          "role": "liveness",
+          "path": "/",
+          "port": 8080,
+          "kind": "http",
+          "initial_delay_seconds": 15,
+          "period_seconds": 20
+        },
+        {
+          "role": "readiness",
+          "path": "/",
+          "port": 8080,
+          "kind": "http",
+          "initial_delay_seconds": 5,
+          "period_seconds": 10
+        }
+      ],
+      "rationale": "Accepted as generated. Asking the web server for / proves the bundle is being served and nothing more, which is the honest limit of a health check against static files. Adding a real health route to the app is the better answer and is a change to the application, not to this configuration.",
+      "evidence": [
+        "frontend/package.json:1"
+      ],
+      "confidence": "high"
+    }
+  ]
+}

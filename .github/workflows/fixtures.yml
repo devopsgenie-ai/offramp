@@ -1,0 +1,59 @@
+name: fixtures
+
+# SPIKE.md #23. RFC-0001 has CI gate on three series, and each compares the code
+# against a file under fixtures/ that the RFC gate does not cover. Two of those
+# files are assertions rather than outputs, so lowering one makes a regression green
+# and nothing notices.
+#
+# This does not gate fixtures/. Requiring an accepted RFC to add a fixture, or to
+# correct a typo in ground truth, is out of proportion and would teach people to
+# write throwaway RFCs. It makes weakening an assertion loud instead: one sentence
+# in the pull-request body, which is the shape RFC-0001 already chose for gap counts.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  truth:
+    name: Detected facts match truth.yaml
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install pyyaml
+      - run: python scripts/check_fixtures.py truth
+
+  guard:
+    name: Assertion changes are acknowledged
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install pyyaml
+
+      # The body is passed through the environment, never interpolated into the
+      # script, so its contents cannot be executed as shell.
+      - name: Capture pull-request body
+        run: printf '%s' "$PR_BODY" > /tmp/body.txt
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+
+      - name: Report what this change does to the assertions
+        run: |
+          git fetch --no-tags origin "$BASE_REF"
+          python scripts/check_fixtures.py guard \
+            --base "origin/$BASE_REF" --body-file /tmp/body.txt
+        env:
+          BASE_REF: ${{ github.base_ref }}

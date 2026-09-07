@@ -1,0 +1,71 @@
+# Ground truth for this fixture. HAND-WRITTEN, and deliberately so.
+#
+# RFC-0001: gap count alone rewards the wrong thing, because a detector that
+# guesses instead of emitting a gap improves it and the golden tree cannot object.
+# This file is the correction: the values a human knows to be true about this
+# application, written independently of anything a detector produces. CI asserts
+# detected facts against it at 100%.
+#
+# Never regenerate this file from a scan. A tool writing its own exam paper is not
+# ground truth. If a detector disagrees with a line here, the detector is wrong
+# until someone has read the source and decided otherwise -- and if the decision is
+# that this file was wrong, say so in the pull request, because lowering the bar
+# should cost a sentence. See SPIKE.md #23.
+
+platform: emergent
+
+services:
+  backend:
+    role: api
+    language: python
+    ports: [8001]
+    start_cmd: uvicorn server:app --host 0.0.0.0 --port 8001
+    # The decorator says "/health". The router carries prefix="/api" and is mounted
+    # with no further prefix, so the path that actually answers is /api/health.
+    # Confirmed against a running container, not read off the source.
+    probes:
+      liveness: /api/health
+      readiness: /api/health
+    env:
+      MONGO_URL:
+        source: datastore
+        binding: runtime
+        sensitive: true
+      DB_NAME:
+        source: datastore
+        binding: runtime
+        sensitive: false
+        value: emergent_status_board
+
+  frontend:
+    role: web
+    language: node
+    # Compiled to static files; the port and probes belong to whatever serves them,
+    # so there is no true answer here for a detector to find.
+    ports: []
+    build_output: build
+    env:
+      REACT_APP_BACKEND_URL:
+        source: platform
+        # Create React App substitutes this into the bundle at build time. Rendering
+        # it as a runtime env var is a no-op against a container serving static files.
+        binding: build_arg
+        sensitive: false
+
+datastores:
+  mongodb:
+    kind: mongodb
+    consumed_by: [backend]
+    env_keys: [DB_NAME, MONGO_URL]
+
+routes:
+  - path: /api
+    service: backend
+  - path: /
+    service: frontend
+
+# Credentials committed to the repository. Each must be reported as a blocking gap
+# naming the key and the file, and no value may reach any generated artifact.
+committed_credentials:
+  - path: backend/.env
+    key: MONGO_URL

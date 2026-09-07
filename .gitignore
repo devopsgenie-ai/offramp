@@ -20,3 +20,9 @@ build/
 kubeconfig
 *.pem
 *.key
+
+# Fixtures must be able to carry a committed .env: RFC-0001 calls for a fixture
+# "with a committed .env", and detecting one is a named requirement (AGENTS.md §4).
+# The values in them are synthetic. Without this negation the rule above silently
+# excludes the file the detector exists to find. See SPIKE.md.
+!fixtures/**/.env
