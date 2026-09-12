@@ -5,8 +5,9 @@
 ## Authorising RFC
 
 <!--
-Changes to src/, schemas/ or templates/ require an accepted RFC. Cite it as RFC-NNNN
-(four digits) — CI checks that it exists and is accepted.
+Changes to src/, schemas/, templates/ or skills/ require an accepted RFC. Cite it as
+RFC-NNNN (four digits) — CI checks that it exists and is accepted. Everything under
+skills/ is gated, including SKILL.md.
 
 If this change is exempt (docs, tests for existing behaviour, CI, typos, dependency
 bumps), delete the line below and say which exemption applies.

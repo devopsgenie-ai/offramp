@@ -89,7 +89,7 @@ output.
   a migration is the moment when rotating costs least.
 - Never write a secret value into a fixture, a test, a log line, or an error message.
 - **Never into the answers file.** It is committed to the user's repository. `apply` rejects
-  any entry targeting an `EnvVar` whose `source` is `secret`. An answer may say where a
+  any entry targeting an `EnvVar` whose `sensitive` flag is true. An answer may say where a
   secret comes from; never what it is.
 
 ## 5. Gaps over guesses
@@ -115,7 +115,7 @@ Use these terms precisely; they are the shared language of the codebase and the 
 | **Gap** | Something the tool could not determine, typed and reported. |
 | **Fixture** | A checked-in sample app used as a golden test input. |
 | **Plan** | A typed, schema-validated changeset proposing AppSpec values. Data, never an action — the model's only output. |
-| **Answers file** | The accumulated, human-accepted result of applied plans, committed to the app repository. A deterministic input to `scan`. |
+| **Answers file** | `answers.json`: the accumulated, accepted result of applied plans, committed to the app repository. A deterministic input to `scan`. |
 | **Skill** | The distribution surface: an instruction file that orchestrates, plus scripts that decide. |
 
 Detectors never write files. Renderers never read the source repository. If you find

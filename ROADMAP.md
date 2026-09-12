@@ -14,16 +14,16 @@ to us as much as to anyone.
 | Item | RFC | Notes |
 |---|---|---|
 | Core architecture | [0001](rfcs/0001-architecture.md) | Detectors, AppSpec, renderers, gaps. **In review.** |
-| First scenario: Python API + JS frontend + document DB | — | The common shape from current app-generation platforms. |
-| First target: Kubernetes via Kustomize + GitOps | — | Base, overlays, `ApplicationSet`, Dockerfiles. |
-| Golden fixture corpus + gap metrics in CI | — | The quality baseline everything else is measured against. |
-| CLI | — | `scan`, `generate`, `gaps`. |
+| First scenario: Emergent (FastAPI + CRA + Mongo) | — | First because it has a service worth generating, not because it is typical. The modal generated app is a Vite SPA with no backend in the repo. |
+| First target: Kubernetes via Kustomize + GitOps | — | Capability choice, not a demonstrated user need. |
+| Golden fixture corpus + gap metrics in CI | — | Multi-module fixtures; `truth.yaml`; bare gap count. |
+| Skill | — | Clone-and-point at `skills/offramp/`. Scripts remain the product. |
 
 ## Next
 
 | Item | Notes |
 |---|---|
-| **MCP server** | Same operations as the CLI, exposed as tools so a coding agent can drive the pipeline and resolve gaps conversationally. |
+| **MCP server** | Same operations as the scripts, exposed as tools so a coding agent can drive the pipeline and resolve gaps conversationally. |
 | **Adopt mode** | Read an existing deployment repository, infer its conventions, and generate config in its dialect instead of the default layout. The higher-value mode for established teams; needs greenfield as its reference first. Convention inference must report what it inferred rather than guess silently. |
 | **Terraform target** | Managed data services, registries, and cluster-adjacent resources. Policies generated in HCL with real interpolation — never as opaque literals in a variables file. |
 | **More scenarios** | Lovable (Vite + React + hosted Postgres), Vercel, then Bolt / v0 / Replit. Vercel is the highest-demand and hardest: middleware, ISR, edge runtime, image optimisation and server actions do not lift cleanly. |

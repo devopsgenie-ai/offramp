@@ -12,7 +12,8 @@ which makes it a good moment to disagree with it cheaply.
 ## The short version
 
 Design happens before implementation, in public, in an RFC. Nothing lands in `src/`,
-`schemas/` or `templates/` without an accepted RFC authorising it, and CI enforces that.
+`schemas/`, `templates/` or `skills/` without an accepted RFC authorising it, and CI
+enforces that. Everything under `skills/` is program text, `SKILL.md` included.
 
 This is deliberately stricter than most projects. The reason is that the tool generates
 configuration people will run against their own infrastructure, and once it is generating
@@ -25,7 +26,9 @@ Comment on [RFC-0001](rfcs/0001-architecture.md). Specifically:
 
 - Is the AppSpec missing a field your application would need?
 - Is there a source platform whose shape breaks the model?
-- The three open questions at the end are genuinely open.
+- The open questions from drafting are resolved; push on the spike revisions
+  (AppSpec fields, multi-module fixtures, existing Dockerfiles) if they still
+  look wrong.
 
 ## Making a change
 
@@ -46,6 +49,11 @@ repository, and never include a real credential, hostname or account identifier 
 expired one. Note that these platforms frequently commit live `.env` files, so assume your own
 export contains one until you have checked.
 
+A fixture that is merely plausible is not enough. At least one fixture per scenario must
+be **structurally representative**: routes and environment-variable reads live in more
+than one module, the way real generated repositories do. A single-file `server.py` will
+validate detectors against a shape they will not see in production.
+
 **The recall corpus is referenced, never copied.** Detector hit rates are measured against
 public repositories that stay where they are. Contribute a query or an identifier, never the
 code — most of these repositories carry no licence, and an unlicensed repository is not
@@ -54,7 +62,8 @@ redistributable regardless of how public it is.
 ## Reporting something sensitive
 
 If you find a security issue, or a case where the tool copies a secret into its output,
-do not open a public issue. Email security@devopsgenie.ai.
+do not open a public issue. Report it through
+[GitHub private vulnerability reporting](https://github.com/devopsgenie-ai/offramp/security/advisories/new).
 
 ## Conduct
 

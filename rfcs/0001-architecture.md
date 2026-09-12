@@ -4,7 +4,7 @@ title: "Architecture: detectors, AppSpec, plan and apply, renderers, gaps"
 status: review
 authors: [ishantdeep-hue]
 created: 2026-09-05
-updated: 2026-09-06
+updated: 2026-09-11
 ---
 
 > Establishes the core architecture: deterministic scripts that read an application
@@ -62,7 +62,7 @@ Five deterministic scripts and one model-produced artifact between them.
 ```mermaid
 flowchart TD
     repo[/"repository"/] --> scan[["scan"]]
-    answers[("answers.yaml")] --> scan
+    answers[("answers.json")] --> scan
     scan --> spec[/"AppSpec"/]
     scan --> gaps[/"gaps"/]
     spec --> render[["render"]]
@@ -99,12 +99,15 @@ JSON, with a versioned schema.
 
 ```
 AppSpec
-  name          str
+  name          str?                # git remote, or a blocking gap. Never the
+                                    # checkout directory — that made 10 of 15
+                                    # files depend on the clone path.
   source        { platform, repo_url, commit }   # provenance; never answerable
   services      [Service]
   datastores    [Datastore]
   routes        [Route]
   environments  [Environment]
+  delivery      Delivery            # destination inputs; none are detectable
 
 Service
   name          str                 # identity: answers key on this, never on index.
@@ -112,22 +115,32 @@ Service
                                     # answerable; changing the derivation is breaking.
   role          web | api | worker | cron
   runtime       { language, version }
-  build         { context, dockerfile?, install_cmd, build_cmd?, start_cmd, args: [str] }
-  ports         [int]
-  health        { path, port, kind: http|tcp }
+  build         { context, dockerfile?, install_cmd, build_cmd?, start_cmd?,
+                  output_dir? }     # no args: a build arg is an EnvVar
+  ports         [int]               # empty if the renderer owns the port
+  probes        [Probe]             # liveness | readiness | startup; not one health
   env           [EnvVar]
   resources     { requests, limits }
   replicas      int
 
 EnvVar
   name          str
-  source        literal | secret | datastore
-  binding       runtime | build_arg   # build_arg is baked into the image, not the pod
+  source        literal | datastore | platform   # provenance only
+  binding       runtime | build_arg
+  sensitive     bool                # apply and secretKeyRef key on this
+  value         str?                # literal / answered value; never a secret
+
+Probe
+  role          liveness | readiness | startup
+  path          str
+  port          int
+  kind          http | tcp
 
 Datastore
+  name          str                 # identity; kind alone collides
   kind          mongodb | postgres | redis | ...
   version       str?
-  mode          in_cluster | managed | external   # never defaulted; always the user's
+  mode          in_cluster | managed | external   # never defaulted
   consumed_by   [service_name]
   env_keys      [str]
 
@@ -135,22 +148,43 @@ Route
   host          str?
   path          str
   service       str
-  port          int
+  port          int?                # null = wire to the Service's named port
   tls           bool
 
 Environment
   name          str
+  namespace     str?
   replicas      {service: int}?
   resources     {service: ...}?
+
+Delivery
+  image_registry    str?
+  image_tag         str?            # per-build; CI answers it, see below
+  gitops_repo_url   str?
+  ingress_class     str?
+  target_cluster    str
 ```
+
+The AppSpec must be able to hold every input the renderers consume, including the ones
+that describe the destination rather than the application. A field that cannot be pointed
+at cannot be a well-formed gap and cannot be answered.
 
 `EnvVar.binding` exists because the first scenario breaks without it. A Vite or CRA
 frontend reads its API base from `VITE_API_URL` or `REACT_APP_BACKEND_URL`, and both are
 substituted into the JavaScript bundle at build time. Rendering them as a `ConfigMap` and
 a Deployment `env:` block is a no-op against a container serving static files: the bundle
 still contains the platform URL, every check passes, and the migrated frontend talks to
-the platform the user just left. `binding: build_arg` routes the value into
-`build.args` and the Dockerfile instead.
+the platform the user just left. `binding: build_arg` is an `EnvVar` the renderer reads
+when it writes the Dockerfile. There is no second home for that fact.
+
+`source` is provenance. `sensitive` is the security axis. One enum cannot say "this
+comes from the datastore" and "this is a credential" at the same time: `MONGO_URL` is
+both, and a guard keyed on `source == secret` would miss the one value it most needs
+to protect. `apply` and the renderer's `secretKeyRef` both key on `sensitive`.
+
+A `build_arg` is public by construction — it is compiled into a file served to every
+browser — so it is never `sensitive`. If one *is* a real secret, the gap says "this is
+already public", not "rotate before cutover".
 
 Two rules keep the boundaries honest: **detectors never write files, renderers never read
 the source repository.** Wanting to break either one means the AppSpec is missing a field.
@@ -161,9 +195,26 @@ Adding the field is the fix.
 Each detector answers one narrow question and contributes facts. They compose; they do not
 coordinate. A detector that cannot determine its answer emits a gap rather than a default.
 
-For the first scenario the set is: runtime and version, dependency manifest and install
-command, service entrypoint and port, health endpoint, environment variable usage and
-binding, datastore identification, and static frontend build output.
+For the first scenario the set is: runtime and version, dependency manifest, install
+command and whether the transitive set is pinned, service entrypoint and port, health
+probes, environment variable usage and binding, datastore identification, committed
+credentials, and static frontend build output.
+
+**Detectors walk the service tree.** Looking only at `server.py` (or any single entry
+file) is a bug. Real Emergent backends put routes, env reads and helpers under
+`routes/`, `services/` and `security/`. A detector that parses one module reports a
+confident, incomplete AppSpec — one environment variable, no routes, no probe — and
+`kubeconform` is satisfied. That is the "confident and wrong" failure from the Problem
+section, produced by the tool this RFC describes.
+
+The walk excludes `node_modules`, `.venv`, `venv`, `build/`, `dist/`, `.git` and
+`__pycache__`. Excluding only `node_modules` will treat a dependency's example `.env`
+as the user's committed credential.
+
+Datastore identity is taken from *usage* (imports, clients, connection construction),
+not from a dependency name alone. `motor` in `requirements.txt` is evidence the app
+once used Mongo; it is not evidence it still does. When dependencies and imports
+disagree, the detector emits a gap naming both, rather than picking.
 
 ### Gaps
 
@@ -172,18 +223,30 @@ A gap is a typed record of something the tool could not determine:
 ```
 Gap
   id            str                 # stable and name-based, "service.api.health.path"
-  pointer       str                 # JSON pointer into this run's AppSpec
+  kind          value | action      # action is acknowledged, not valued
+  pointers      [str]               # zero-to-many; JSON pointers into this run
   question      str
   proposed      any?
   confidence    high | medium | low
   severity      blocking | important | cosmetic
   evidence      [str]
-  origin        detector | model | stale_answer
+  evidence_scope [str]              # path prefixes a citation may be hashed under
+  origin        detector | model | stale_answer | orphaned_answer
+  depends_on    [Gap.id]            # a later answer may make this moot
 ```
 
-`id` is the durable identity and the key everything else uses. `pointer` is a per-run
-addressing convenience, recomputed on every scan, and nothing may persist it — array
-indices are a function of detector output, not of application identity.
+`id` is the durable identity and the key everything else uses. `pointers` are a per-run
+addressing convenience, recomputed on every scan, and nothing may persist them — array
+indices are a function of detector output, not of application identity. Gap-to-field is
+zero-to-many: a credential value must never enter the AppSpec, and one hostname answer
+sets every route.
+
+An `action` gap is not answered by supplying a value. Rotate this credential, commit a
+lock file, freeze transitive dependencies: those are acknowledged (`Answer.kind:
+action`), not valued. A value-only answers model would re-ask them on every run.
+
+`depends_on` is how a flat list stays honest. `datastore.version` only matters if
+`mode` is `in_cluster`; answering `managed` retires it unasked.
 
 A credential found committed in the source repository is a gap of its own, and it carries
 one instruction the others do not: **rotate it before cutover, naming the key and the file it
@@ -219,7 +282,10 @@ PlanEntry
   current       any?                # value at plan time; a compare-and-swap precondition
   proposed      any
   rationale     str                 # why, in plain language, for the human reviewing
-  evidence      [str]               # file:line, checked by apply to exist and to match
+  evidence      [{path, line, sha256}]
+                                    # hashed by show; apply refuses drift.
+                                    # Citations outside the gap's evidence_scope
+                                    # are shown as context, never hashed.
   confidence    high | medium | low
 ```
 
@@ -277,20 +343,45 @@ applies to renderers.
 It rejects an entry when: the basis does not match; `current` differs from the live value
 (compare-and-swap); an entry with `kind: override` was accepted as a resolve; the target is
 outside the declared answerable set; two entries target
-the same id or nest; the cited evidence does not resolve to a real file and line range; or
-the target is an `EnvVar` whose `source` is `secret`.
+the same id or nest; the cited evidence does not resolve to a real file and line range,
+or its hash has drifted since `show` stamped it; or the target is an `EnvVar` whose
+`sensitive` flag is true.
 
 That last rule matters more than it looks. The answers file is written to the user's
 repository and committed. Without the rule, the natural reading of "supply the value the
 tool could not determine" walks a user into pasting a live database password into a file
 they are then told to commit. Secret *values* never enter an answer, per AGENTS.md §4;
-an answer may say where a secret comes from, never what it is.
+an answer may say where a secret comes from, never what it is. Keying the guard on
+`source == secret` is not enough: a connection string is `source: datastore` and
+`sensitive: true`.
+
+`show` is what hashes evidence. A model cannot hash a line by hand and should not be
+asked to. `apply` compares the stored hash to the bytes on disk at apply time; a line
+that changed between review and apply is a rejection. The basis check does not cover
+this — a dependency bump moves no AppSpec field. Those are two surfaces.
+
+Citations outside a gap's `evidence_scope` are kept as `Answer.context`: shown to the
+reviewer, never hashed, never a reason to re-ask. Padding a citation list with
+`frontend/src/App.css` must not become a permanent re-ask trigger for a question about
+Python. Reasoning across the repository is what a model is for, so out-of-scope
+citations are not rejected outright.
+
+Stored answers stay in the declared address space. Deriving the set from *open* gaps
+means answering a gap retires it, and a later plan that revises the answer is rejected
+as out-of-address-space. The only remaining edit path would be the file this machinery
+exists to keep hand-editing out of.
 
 ### The answers file
 
-The accumulated, human-accepted result of applied plans. It lives in the user's repository,
+The accumulated, accepted result of applied plans. It lives in the user's repository,
 is reviewed in a diff, and is a deterministic input to `scan` on the same footing as the
-source tree. It is what stops the second run re-asking everything.
+source tree. It is what stops the second run re-asking everything. The file is JSON,
+not YAML: it is rewritten by the tool and must be byte-stable across versions, and YAML
+has many valid serialisations of the same data.
+
+"Accepted" is wider than "human-accepted". CI answers `Delivery.image_tag` on every
+build (`Answer.accepted_by: ci`). The distinction stays visible so a reviewer can still
+see which answers a person decided.
 
 ```
 AnswersFile
@@ -299,11 +390,22 @@ AnswersFile
 
 Answer
   target        str                 # the stable id
-  value         any
-  detected      any?                # what the detector produced when this was answered
+  kind          value | action
+  value         any?
+  detected      any?                # from the bare, pre-merge AppSpec — never the live one
   evidence      [{path, lines, sha256}]
+  context       [{path, line}]      # shown, never hashed
+  accepted_by   human | ci          # default human; adding it does not bump version
   detectors_version str
 ```
+
+`Answer.detected` and a plan entry's `current` look like the same value and are not.
+`current` is the compare-and-swap precondition: what the human reviewed, which after a
+merge is a previously-answered value. `detected` is what the detector produced when
+this was answered. Filling `detected` from the live AppSpec records an answer as though
+a detector had produced it, and every later scan then reports the real detector as
+disagreeing. `scan` writes a `detected.json` sidecar from the bare, pre-merge spec;
+`apply` reads that.
 
 The file carries a format version from the first commit, and `scan` hard-fails on a version
 it does not recognise rather than attempting a migration. The AppSpec deliberately carries
@@ -324,32 +426,47 @@ The rule is therefore:
 > A live detector value that disagrees with a stored answer never wins silently, in either
 > direction. It becomes a gap.
 
-`scan` merges an answer only when the detector still produces the value recorded in
-`detected` (or still produces nothing, when `detected` is null) **and** every cited evidence
-range hashes to what was recorded. Otherwise the answer is not merged: it is re-emitted as
-a gap with `origin: stale_answer`, carrying both the stored answer and the new detected
-value, which the model turns into an ordinary plan entry for a human to confirm.
+`scan` merges an answer when one of these holds:
 
-There is a third way an answer goes wrong, and it defeats that test rather than failing it.
-If the answer's target no longer exists in this run's AppSpec — a service renamed, a service
-removed — then for a `resolve` answer `detected` is null, the detector still produces
-nothing, and if the cited files did not move their ranges still hash. Both conditions pass
-while the thing they guard does not exist. Such an answer is re-emitted as a gap with
-`origin: orphaned_answer`, carrying the stored value and the ids that do exist. It is never
-silently dropped: a human accepted it, and its disappearance is information.
+- The detector still produces the value recorded in `detected` (or still produces
+  nothing, when `detected` is null) **and** every cited evidence range hashes to what
+  was recorded.
+- The detector now produces *exactly* the stored answer. Agreement wins. The answer
+  merges and is reported under "answers a detector has caught up with" — a note, not a
+  gap. Action answers are excluded, since they carry no value.
 
-This is why `Service.name`'s derivation is fixed by this RFC rather than left to a detector.
-Changing it renames every service at once and orphans every answer in every user's
-repository, which makes it a breaking change requiring a superseding RFC.
+Otherwise the answer is not merged: it is re-emitted as a gap with `origin:
+stale_answer`, carrying both the stored answer and the new detected value, which the
+model turns into an ordinary plan entry for a human to confirm.
+
+The second bullet is the correction that keeps graduation from taxing the improvement.
+The letter of "detected must still match" re-asks when a detector moves from null to
+the value the human already gave. Measured on the spike fixture, graduating `app.name`
+raised the answered gap count from 0 to 3, two of them with identical values on both
+sides. That is the same metric inversion this section already rejects, with the sign
+flipped: a detector getting better raised the count. A stream of questions where both
+sides read identically is how a reviewer learns to click through.
+
+Agreement also overrides the evidence test: a detector producing the value *is* the
+evidence, and the human's citation no longer has to hold. If the detector later moves
+to a *different* value, that disagreement is still a `stale_answer` gap.
+
+Orphaning is resolved against the **AppSpec**, not the gap list. Resolving against
+open gaps turns every graduation into an orphan, because a gap disappearing is also
+what success looks like. If the answer's target no longer exists in this run's
+AppSpec — a service renamed, a service removed — the answer is re-emitted as a gap
+with `origin: orphaned_answer`, carrying the stored value and the ids that do exist.
+It is never silently dropped.
+
+This is why `Service.name`'s derivation is fixed by this RFC rather than left to a
+detector. Changing it renames every service at once and orphans every answer in every
+user's repository, which makes it a breaking change requiring a superseding RFC.
+`AppSpec.name` gets the same care: it is taken from the git remote, or it is a
+blocking gap. It is never derived from the checkout directory.
 
 Evidence is hashed by cited line range rather than by whole file. Hashing
-`backend/server.py` would invalidate every answer that cites it on every unrelated commit,
-which is the re-asking the answers file exists to eliminate.
-
-This is also what makes detector graduation work. When a recurring plan entry is retired
-into a real detector, that detector now produces a value where it produced none, the
-stored answers go stale rather than shadowing it, and the improvement shows up instead of
-being masked by exactly the answers that justified writing it.
+`backend/server.py` would invalidate every answer that cites it on every unrelated
+commit, which is the re-asking the answers file exists to eliminate.
 
 ### Renderers
 
@@ -359,11 +476,28 @@ functions and their output is byte-stable.
 The first target is Kubernetes delivered by GitOps, emitting the conventional Kustomize
 layout — a `base/` holding the manifests and per-environment overlays that patch image,
 resources and environment-specific values — plus the GitOps `ApplicationSet` that points at
-each overlay, and a Dockerfile per service.
+each overlay, and a Dockerfile per service that does not already have one.
 
 The layout is deliberately conventional rather than novel. The output should look like
 something a competent platform engineer would have written by hand, because a human has to
 review it, own it, and modify it for the next five years.
+
+**Existing deployment artifacts are not overwritten.** v1 is greenfield for the
+*deployment repository* the tool scaffolds. The *source* repository often already has
+a `Dockerfile`, a `Procfile`, or a `deploy.sh` — the first real Emergent repo the spike
+ran against had all three. Full adopt mode (inferring conventions from an existing
+Kustomize tree) stays out of scope. The v1 rule is narrower: if a service already has
+a Dockerfile, the detector records that path on `Build.dockerfile` and the renderer
+does not emit a second one. If the existing file and the file the renderer would have
+written diverge, that is a gap naming both, not a silent extra file.
+
+**`Delivery.image_tag` is a per-build fact.** The honest answer is "whatever CI just
+built". Standard GitOps has CI write the new tag into the manifests and commit, and
+that collides with `verify`'s invariant. The resolution is to keep the field and have
+CI answer it: `scan → one-entry plan → apply --accepted-by ci → scan → render →
+commit`. The tag is then a genuine AppSpec change, `verify` stays green with no
+carve-out, and no model or key is involved. An immutable tag is also what makes
+`imagePullPolicy: IfNotPresent` correct rather than dangerous; the two are coupled.
 
 **A datastore's `mode` is never defaulted.** Whether a database runs in-cluster, on a managed
 service, or against something the team already operates is a decision about cost, operations
@@ -491,8 +625,10 @@ it improves the first.
   application and is therefore a runbook item, not a generated file. Per-environment image
   builds are the alternative and they break build-once-promote-the-artifact; defaulting to
   them silently is the failure this note exists to prevent.
-- **Greenfield only:** the user has no existing deployment repository, so the tool scaffolds
-  one from an opinionated default.
+- **Greenfield deployment repo, not a greenfield source repo.** The tool scaffolds a
+  deployment repository from an opinionated default. The source application may already
+  contain a Dockerfile or Procfile; see Renderers. Inferring conventions from an
+  existing Kustomize/Helm tree remains out of scope.
 - **Manifests and scaffolding only.** The generated runbook is deferred. v1 emits
   configuration and a gap report; the imperative work stays the user's, described by the
   gaps rather than by a separate document.
@@ -590,10 +726,12 @@ answer` in a canonically serialised sidecar. This makes detector graduation mech
 testable: after adding detector X, assert the provenance for its field flips from `answer`
 to `detector` and that `expected_bare/` gains the correct value.
 
-**Staleness and orphan tests.** Fixtures with an answer whose cited evidence has moved, and
-with a detector that now disagrees, asserting a `stale_answer` gap is emitted rather than the
-answer being merged; and a fixture whose answered service has been renamed away, asserting an
-`orphaned_answer` gap rather than a silent drop.
+**Staleness, agreement and orphan tests.** Fixtures with an answer whose cited evidence
+has moved, and with a detector that now disagrees, asserting a `stale_answer` gap is
+emitted rather than the answer being merged; a fixture whose detector graduates to
+*exactly* the stored answer, asserting a merge and no re-ask; and a fixture whose
+answered service has been renamed away, asserting an `orphaned_answer` gap rather than
+a silent drop.
 
 **Ground truth.** Every fixture's detected facts are asserted against its hand-written
 `truth.yaml`. This is the assertion that fails when a detector guesses.
@@ -604,13 +742,17 @@ including the ordering that puts overrides first.
 **Apply is a pure function** and is golden-tested as one: `(appspec, plan, answers,
 accepted, now) -> answers'`, including every rejection path — bad basis, failed
 compare-and-swap, out-of-address-space target, colliding entries, unresolvable evidence, and
-an attempt to answer a secret, and an override accepted as a resolve.
+an attempt to answer a sensitive EnvVar, evidence that drifted between show and apply,
+and an override accepted as a resolve.
 
 **Verify.** A fixture whose output tree has been deliberately tampered with, asserting a
 non-zero exit and a diff naming the file.
 
 **Validation of generated artifacts.** `kustomize build`, `kubeconform`, and `docker build`
-on generated Dockerfiles. Read-only, touching no real infrastructure.
+on generated Dockerfiles. Read-only, touching no real infrastructure. `docker build`
+alone is not enough: a generated image that cannot `import` its own entrypoint still
+builds. The check that catches that — and a confidently wrong probe — is "the image
+starts and answers its own probe path". It still touches nothing real.
 
 **Gap metrics.** Bare gap count by severity is recorded per fixture; an increase in blocking
 gaps fails CI unless the authorising RFC says why.
@@ -618,10 +760,18 @@ gaps fails CI unless the authorising RFC says why.
 **CI runs no model.** Everything above executes with no API key present. Plan handling is
 tested against checked-in plan fixtures, not generated ones.
 
+**Fixtures must be structurally representative.** At least one fixture per scenario
+splits routes and environment-variable reads across multiple modules. A single-file
+`server.py` will validate every module-scoped detector against a shape real repositories
+do not have, and golden tests will lock the wrong answer in. The same fixture set must
+include a settings-derived router prefix (the undecidable case the model surface exists
+to carry) and a service that already has a Dockerfile.
+
 **Fixtures are generated by the maintainers, not vendored.** Exports are produced on the
 platform's own free tier and scrubbed before they are checked in, which gives real output
 with unambiguous rights and allows the awkward shapes to be made deliberately — an app with a
-worker, one with no health endpoint, one with a committed `.env`. Vendoring public
+worker, one with no health endpoint, one with a committed `.env`, one that is not a
+single file. Vendoring public
 repositories is not viable: 74% of Emergent repositories and 94% of Lovable ones carry no
 licence at all, and pristine exports and permissive licences turn out to be nearly disjoint.
 
@@ -661,8 +811,10 @@ commands spelled out. The tool does not run them.
 
 ## Out of scope
 
-- **Adopting an existing deployment repository** — inferring conventions from a repository
-  the user already has. The more valuable mode for established teams, deliberately second.
+- **Adopting an existing deployment repository** — inferring conventions from a Kustomize
+  or Helm tree the user already has. The more valuable mode for established teams,
+  deliberately second. Reusing an existing *source* Dockerfile is in scope for v1; see
+  Renderers.
 - **Data migration.** Detecting the datastore and generating its deployment is in scope;
   moving the contents is a runbook.
 - **Additional targets** — Terraform, Nomad, Compose, managed container services.
@@ -674,10 +826,35 @@ commands spelled out. The tool does not run them.
   output matches the renderers, not that it runs.
 - **Compliance evidence artifacts.**
 
+## Revisions from the spike
+
+A throwaway branch (`spike/0001-poc`) ran this design end to end against a synthetic
+fixture and then against a real Emergent repository. It is not the implementation and
+must not be merged while this RFC is in review. The findings that change the design
+are folded into the sections above. The ones that matter most:
+
+- The AppSpec as first printed could not render a working application (`EnvVar.value`,
+  `sensitive`, `Delivery`, `AppSpec.name`).
+- Agreement must merge, or graduating a detector raises the answered gap count.
+- `Answer.detected` is taken from the bare spec, not the live one.
+- Evidence is hashed by `show` and refused on drift; relevance is `evidence_scope`.
+- Detectors walk the service tree. The fixture that kept routes and env reads in one
+  `server.py` validated every module-scoped detector against a shape real repositories
+  do not have. On a real one the backend detector found 1 of 15 env vars, no routes
+  and no probe — and `kubeconform` passed. That is the failure the Problem section
+  names.
+- v1 reuses an existing source Dockerfile rather than writing a second one. Full
+  adopt mode stays out of scope.
+
+Status stays `review`. Implementation stays blocked until this RFC is accepted.
+
 ## Open questions
 
-None. The five questions this RFC opened during drafting are resolved in the sections above:
-the answers file carries a format version and the AppSpec does not; a datastore's `mode` is
-never defaulted; reading the running application is rejected under Alternatives; the
-Terraform vocabulary is kept deliberately; and the first implementation targets a single
-`production` environment through the full overlay mechanism.
+None. The five questions this RFC opened during drafting are resolved in the sections
+above, and the spike findings that change the design are absorbed rather than left
+open: the answers file carries a format version and the AppSpec does not; a
+datastore's `mode` is never defaulted; reading the running application is rejected
+under Alternatives; the Terraform vocabulary is kept deliberately; the first
+implementation targets a single `production` environment through the full overlay
+mechanism; detectors walk the tree; fixtures are multi-module; and an existing
+source Dockerfile is reused, not duplicated.
