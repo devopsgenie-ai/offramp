@@ -1,12 +1,14 @@
 # Every change needs a review from a maintainer. Enforced by the ruleset on `main`,
 # which requires code-owner approval before merge.
-* @ishantdeep-hue
+# Two owners so a PR author cannot be the only person who can satisfy the
+# requirement — a single owner who is also the author forces an admin bypass.
+* @ishantdeep-hue @devyansh-dg
 
 # Process and security surfaces — changing these changes the rules everything else
 # is held to, so they are called out explicitly rather than inherited from the glob.
-/AGENTS.md            @ishantdeep-hue
-/SECURITY.md          @ishantdeep-hue
-/CODE_OF_CONDUCT.md   @ishantdeep-hue
-/rfcs/                @ishantdeep-hue
-/scripts/             @ishantdeep-hue
-/.github/             @ishantdeep-hue
+/AGENTS.md            @ishantdeep-hue @devyansh-dg
+/SECURITY.md          @ishantdeep-hue @devyansh-dg
+/CODE_OF_CONDUCT.md   @ishantdeep-hue @devyansh-dg
+/rfcs/                @ishantdeep-hue @devyansh-dg
+/scripts/             @ishantdeep-hue @devyansh-dg
+/.github/             @ishantdeep-hue @devyansh-dg
