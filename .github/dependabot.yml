@@ -1,0 +1,25 @@
+# Dependabot keeps our own supply chain current. It does not touch anything the tool
+# generates — generated output is not a dependency of this repository.
+version: 2
+
+updates:
+  # GitHub Actions are the only third-party code that runs with repository context,
+  # so they are the highest-value thing to keep patched.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"
+    groups:
+      actions:
+        patterns: ["*"]
+    labels:
+      - dependencies
+      - ci
+
+  # NOTE: no `pip` entry yet — this repository has no dependency manifest. Add one here
+  # in the same change that introduces `requirements.txt` or `pyproject.toml`, otherwise
+  # Dependabot reports a missing-manifest error on every run.
