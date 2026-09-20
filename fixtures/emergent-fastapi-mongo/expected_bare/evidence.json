@@ -1,0 +1,20 @@
+[
+  ".emergent/emergent.yml:1",
+  ".gitconfig:1",
+  "backend/.env:2",
+  "backend/.env:3",
+  "backend/requirements.txt:1",
+  "backend/routes/health.py:6",
+  "backend/routes/items.py:9",
+  "backend/routes/items.py:12",
+  "backend/security/auth.py:5",
+  "backend/server.py:1",
+  "backend/server.py:11",
+  "backend/server.py:12",
+  "backend/server.py:14",
+  "backend/services/db.py:1",
+  "backend/services/db.py:5",
+  "backend/services/db.py:6",
+  "frontend/package.json:1",
+  "frontend/src/App.js:3"
+]

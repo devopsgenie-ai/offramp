@@ -1,0 +1,10 @@
+{
+  "files": {
+    "answerable.json": "c7f41293336f505e147099c3c6992b4c4dab4ed1c3d93a0b2dbed828172a4327",
+    "appspec.json": "19fba474855a704c20fcc49397104a5ac325d7c1edad4361e3d5f7accaaac526",
+    "detected.json": "19fba474855a704c20fcc49397104a5ac325d7c1edad4361e3d5f7accaaac526",
+    "evidence.json": "70da989226c31347fa22bdcb3ec636f21ffb01d2a15f62ec0fbb2660c569040c",
+    "gaps.json": "c3ab4397c076a51d62d1899d853cdb4d5bf48acf44988c56fe18ebd1a92f2459",
+    "gaps.md": "471258b079b2af43046e10693e9495d8b9f3131881493352aa48acd50e6eb3df"
+  }
+}
