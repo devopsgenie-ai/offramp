@@ -1,10 +1,10 @@
 ---
 rfc: 0001
 title: "Architecture: detectors, AppSpec, plan and apply, renderers, gaps"
-status: review
+status: accepted
 authors: [ishantdeep-hue]
 created: 2026-09-05
-updated: 2026-09-11
+updated: 2026-09-20
 ---
 
 > Establishes the core architecture: deterministic scripts that read an application
@@ -830,8 +830,8 @@ commands spelled out. The tool does not run them.
 
 A throwaway branch (`spike/0001-poc`) ran this design end to end against a synthetic
 fixture and then against a real Emergent repository. It is not the implementation and
-must not be merged while this RFC is in review. The findings that change the design
-are folded into the sections above. The ones that matter most:
+must not be merged. The findings that change the design are folded into the sections
+above. The ones that matter most:
 
 - The AppSpec as first printed could not render a working application (`EnvVar.value`,
   `sensitive`, `Delivery`, `AppSpec.name`).
@@ -846,7 +846,9 @@ are folded into the sections above. The ones that matter most:
 - v1 reuses an existing source Dockerfile rather than writing a second one. Full
   adopt mode stays out of scope.
 
-Status stays `review`. Implementation stays blocked until this RFC is accepted.
+Implementation follows the build order in *Scope of the first implementation*: `scan`
+first; then the first renderer and its manifest, with `verify` in the same change; then
+`show` and `apply`; then the skill.
 
 ## Open questions
 
