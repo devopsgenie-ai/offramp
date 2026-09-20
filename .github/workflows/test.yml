@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   test:
-    name: Tests
+    name: Tests and fixture ground truth
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,3 +19,4 @@ jobs:
           python-version: "3.11"
       - run: pip install pytest pyyaml
       - run: python -m pytest -q
+      - run: python scripts/check_fixtures.py
