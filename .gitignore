@@ -20,3 +20,9 @@ build/
 kubeconfig
 *.pem
 *.key
+
+# Fixtures deliberately carry committed credentials: a committed .env is the golden
+# input for the committed-credential detector, and 27 of 100 sampled Emergent
+# repositories ship one. Every value in a fixture is invented and every hostname is
+# under the reserved .invalid TLD.
+!fixtures/**/.env

@@ -1,0 +1,18 @@
+# The prefix is read from configuration at runtime, so it is genuinely not in the
+# repository. The correct detector output is no route and one gap -- not "/health".
+app:
+  name: settings-prefix
+  platform: unknown
+services:
+  - name: backend
+    role: api
+    language: python
+    install_cmd: pip install -r requirements.txt
+    dockerfile: null
+    routes: []
+    env: []
+    probes: []
+datastores: []
+committed_credentials: []
+must_not_detect:
+  routes: ["/health", "/api/health"]

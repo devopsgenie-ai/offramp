@@ -1,0 +1,64 @@
+# Ground truth for this fixture, written by hand. RFC-0001, Testing: "the values a
+# human knows to be correct for that application, written by hand and independent of
+# anything a detector produces."
+app:
+  name: widgets
+  platform: emergent
+
+services:
+  - name: backend
+    role: api
+    language: python
+    install_cmd: pip install -r requirements.txt
+    dockerfile: null
+    port: 8001
+    routes:
+      - /api/health
+      - /api/items
+    env:
+      - name: MONGO_URL
+        binding: runtime
+        sensitive: true
+      - name: DB_NAME
+        binding: runtime
+        sensitive: false
+      - name: JWT_SECRET
+        binding: runtime
+        sensitive: true
+      - name: ITEMS_PAGE_SIZE
+        binding: runtime
+        sensitive: false
+    probes:
+      - role: readiness
+        path: /api/health
+      - role: liveness
+        path: /api/health
+
+  - name: frontend
+    role: web
+    language: node
+    install_cmd: npm install
+    dockerfile: frontend/Dockerfile
+    routes: []
+    env:
+      - name: REACT_APP_BACKEND_URL
+        binding: build_arg
+        sensitive: false
+    probes: []
+
+datastores:
+  - name: mongodb
+    kind: mongodb
+    consumed_by: [backend]
+    env_keys: [MONGO_URL]
+
+committed_credentials:
+  - path: backend/.env
+    key: MONGO_URL
+  - path: backend/.env
+    key: JWT_SECRET
+
+# Keys that must NOT appear anywhere in detector output.
+must_not_detect:
+  env_names: [WDS_SOCKET_PORT]
+  credential_paths: [frontend/node_modules/leftpad/.env]

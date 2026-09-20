@@ -1,0 +1,6 @@
+# Mirrors the real platform's own .gitignore: a heading for environment files, and no
+# pattern under it. This is why a committed .env is the normal case, not the exception.
+node_modules/
+__pycache__/
+
+# Environment files
