@@ -29,6 +29,10 @@ datastores:
 committed_credentials: []
 
 findings:
+  # index.html loads gptengineer.js from Lovable's CDN.
+  - platform.hardcoded_url.lovable-editor-script
+  # The edge function calls Lovable's AI gateway with a Lovable key.
+  - platform.hardcoded_url.lovable-ai-gateway
   # Read by browser code; the name says it is a secret.
   - frontend.secret_in_bundle.web.VITE_OPENAI_API_KEY
   # Created in the init migration, never given RLS.
@@ -43,6 +47,7 @@ findings:
 assessments:
   credential.committed: clean
   frontend.secret_in_bundle: found
+  platform.hardcoded_url: found
   service.no_health_endpoint: not_applicable
   supabase.rls.disabled: found
   supabase.rls.permissive_write: found

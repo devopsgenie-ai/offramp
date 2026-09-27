@@ -1,82 +1,82 @@
 # offramp
 
-**The off-ramp from managed app platforms.** `offramp` reads an application that was
-built on a hosted platform — Emergent, Lovable, Vercel — and generates the declarative
-configuration needed to run it on infrastructure you own.
+**Is the app you built on Lovable or Emergent safe to keep running, and what would it take
+to own it?** `offramp audit` reads the repository and tells you. It sends no request to
+your app and needs no credentials or account. Nothing leaves your machine.
 
-> **Status: pre-implementation.** This repository currently contains process and design
-> only. No tool exists yet. [RFC-0001](rfcs/0001-architecture.md) proposes the
-> architecture and is open for comment. Nothing gets built until it is accepted.
+```bash
+git clone https://github.com/devopsgenie-ai/offramp
+python3 offramp/skills/offramp/scripts/audit.py path/to/your-app --out audit-report
+```
 
-## What it will do
+That writes `audit-report/report.md` for you to read and `audit-report/report.json` for
+tools. It needs Python 3.11 or later and nothing else.
 
-Given an app repository, `offramp` produces:
+## What it checks
 
-- **Container definitions** — a Dockerfile per service, following the conventions of the
-  detected stack.
-- **Kubernetes configuration** — Kustomize bases and per-environment overlays, plus the
-  GitOps wiring (an ArgoCD `ApplicationSet`) to deliver them.
-- **Infrastructure as code** — Terraform for the managed services the app depends on.
-- **A gap report** — a typed, machine-readable list of everything it could not determine
-  on its own, each with a question, a proposed default, and a confidence level.
+| Check | Severity | What it finds |
+|---|---|---|
+| `supabase.rls.disabled` | critical | A table the app exposes through Supabase with no row-level security. Anyone with the public key can read and change every row, and every visitor's browser has that key. |
+| `supabase.rls.permissive_write` | high / medium | A policy that lets anyone, or any signed-in user, update or delete rows with a condition of `true`. An anonymous insert, such as a contact form, is reported as medium. |
+| `supabase.rls.public_read` | medium | A table anyone can read in full. This can be intended; the report asks you to confirm. |
+| `credential.committed` | critical | A password, token or `service_role` key committed to the repository. Deleting the file does not help, because it stays in the git history. |
+| `frontend.secret_in_bundle` | critical / high | A secret shipped to every browser: a `VITE_*` or `REACT_APP_*` variable with a secret's name, or a `service_role` key in frontend code. |
+| `platform.hardcoded_url` | medium / low | What stops working when you leave the platform: sign-in through the platform's own auth, AI calls through its gateway, a frontend built against its preview URL. |
+| `service.no_health_endpoint` | low | A backend that nothing can ask "are you working?". |
+
+The row-level-security checks replay `supabase/migrations/` in order. A table whose RLS
+is enabled three migrations later is reported as clean, and a dropped table is not
+reported. A publishable or anon key is never a finding. It is public by design, which is
+why the RLS checks exist.
+
+## What it tells you it could not check
+
+A clean report is only worth something if it says what it looked at. Every check reports
+one of four results: found, clean, not applicable, or **could not assess**. When a
+migration uses dynamic SQL, or your tables were created in the Supabase dashboard rather
+than in migrations, the RLS checks say so and give no answer. They never give a partial
+one.
+
+Every report ends with what cannot be seen from a repository at all. That covers policies
+changed in the dashboard, auth settings, backups, who has access, and the git history.
+For each one it points to where you can check.
+
+## In CI
+
+```bash
+python3 skills/offramp/scripts/audit.py . --out audit-report --fail-on high
+```
+
+This exits `1` when a finding is at or above the threshold, `0` otherwise, and `2` if the
+tool itself fails. The report is byte-stable: the same commit always gives the same
+report.
+
+## How accurate it is
+
+Before release we ran it over 190 public repositories built on Lovable and Emergent. We
+read a sample of the findings by hand and fixed every false positive we found. The method
+and the per-check precision are in
+[the pull request that did it](https://github.com/devopsgenie-ai/offramp/pull/16).
+Results are only ever published in aggregate. No repository is named.
+
+If it reports something wrong about your app, please
+[open an issue](https://github.com/devopsgenie-ai/offramp/issues) with the finding's `id`.
+A false positive is a bug.
 
 ## What it will never do
 
-`offramp` is a **code author, not a deployer**. It does not hold cloud credentials and
-does not mutate running infrastructure.
+`offramp` is a code reader and author, not a deployer. It does not hold cloud credentials,
+send requests to your running application, or change anything. It reads files; you decide
+what to do. The same line holds for the generators on the [roadmap](ROADMAP.md): they
+write configuration for you to review, and your own pipeline applies it.
 
-It will not run `kubectl apply`, `terraform apply`, `helm install`, or any mutating
-cloud API call. It writes files. You review them, you commit them, and your own
-pipeline applies them.
-
-This is a hard architectural constraint, not a default — see
-[AGENTS.md](AGENTS.md#the-declarative-constraint).
-
-## Why
-
-Apps built on hosted platforms are fast to create and difficult to leave. The code is
-yours, but the deployment is not: no Dockerfile, no manifests, no infrastructure
-definition, and no way to run it anywhere else. Teams hit this wall for ordinary
-reasons — cost at scale, or a compliance requirement that data live somewhere specific.
-
-Getting out is a week of undifferentiated work that every team does from scratch.
-`offramp` automates the part of that week nobody should be writing by hand — the
-containers, the manifests, the GitOps wiring — and tells you plainly what it could not
-work out. It does not provision your cluster, move your data, or cut your DNS over. Those
-are yours, and the tool is explicit about which is which.
-
-## Design principles
-
-1. **Declarative output only.** Everything the tool emits is configuration. The
-   imperative steps that genuinely cannot be — a data migration, a DNS cutover — are
-   written into a runbook for a human, never executed.
-2. **Deterministic core.** Detectors and renderers are pure functions: repository in,
-   configuration out. Same input, same bytes. This is what makes the output testable.
-3. **Honest gaps.** The tool reports what it does not know instead of guessing. An
-   unresolved gap is a normal outcome, not a failure.
-4. **Agent-friendly, not agent-dependent.** It runs standalone on a laptop or in CI, and
-   exposes the same operations to a coding agent so an agent can resolve gaps
-   conversationally. The reasoning is optional; the generation is not.
-
-## Using it
-
-Not yet — see the status note above; `skills/` does not exist until RFC-0001 is accepted.
-When it does, the install path is this:
-
-Clone the repository and point your coding agent at `skills/offramp/`. There is no
-registry to install from and no account to create — the skill is a directory of
-instructions and scripts, and the scripts run on their own if you would rather not use an
-agent at all.
-
-That is deliberate. A tool whose purpose is getting you off a platform should not make
-its own distribution depend on one.
+It also names no vendor in its reports, including the people who maintain it.
 
 ## Contributing
 
-The RFC process gates all implementation — see [CONTRIBUTING.md](CONTRIBUTING.md) and
-[rfcs/README.md](rfcs/README.md). Discussion on RFC-0001 is the most useful thing you can
-contribute right now.
+Read [AGENTS.md](AGENTS.md) first. It applies to humans and coding agents alike. Design
+changes go through an [RFC](rfcs/README.md).
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE). Maintained by [DevOps Genie](https://devopsgenie.ai).

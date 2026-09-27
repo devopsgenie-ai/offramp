@@ -1,6 +1,6 @@
 # Readiness audit: task-board (lovable)
 
-critical: 1  high: 2  medium: 1  low: 0 · 6 checks: 4 found, 1 clean, 1 not applicable, 0 could not assess
+critical: 1  high: 2  medium: 2  low: 1 · 7 checks: 5 found, 1 clean, 1 not applicable, 0 could not assess
 
 This report is produced by reading the repository only. It sends no request to the running application and holds no credential. Secret values are never copied into it; findings cite a file and line instead.
 
@@ -34,6 +34,14 @@ The policy "Authenticated users can update tasks" on `public.tasks` allows UPDAT
 
 ## medium
 
+### AI calls go through Lovable's AI gateway
+
+Model calls are sent to Lovable's AI gateway with a Lovable key. They stop working outside Lovable, and usage is billed through the platform.
+
+- evidence: `supabase/functions/send-digest/index.ts:6`
+- remedy: Call the model provider directly with your own key, from a server-side function.
+- id: `platform.hardcoded_url.lovable-ai-gateway`
+
 ### Every row in `public.profiles` is readable without signing in
 
 The policy "Profiles are viewable by everyone" lets anyone read every row of `public.profiles`. That can be intended -- a public catalogue, published posts -- but it also applies to every column, including any added later.
@@ -41,6 +49,16 @@ The policy "Profiles are viewable by everyone" lets anyone read every row of `pu
 - evidence: `supabase/migrations/20260110093000_init.sql:10`
 - remedy: Confirm the table holds nothing private. If it does, restrict the policy, or move the private columns to a table with its own policies.
 - id: `supabase.rls.public_read.public.profiles.profiles-are-viewable-by-everyone`
+
+## low
+
+### Lovable's editor script loads in production
+
+`index.html` loads `gptengineer.js` from Lovable's CDN. Every visitor downloads a third-party script that the app does not need to run.
+
+- evidence: `index.html:7`
+- remedy: Remove the script tag from `index.html` once you no longer edit in Lovable.
+- id: `platform.hardcoded_url.lovable-editor-script`
 
 ## Checked and clean
 

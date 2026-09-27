@@ -17,6 +17,7 @@ from typing import Callable
 from checks.credentials import check_committed_credentials
 from checks.frontend import check_secret_in_bundle
 from checks.health import check_no_health_endpoint
+from checks.platform import check_platform_urls
 from checks.supabase import (
     check_rls_disabled, check_rls_permissive_write, check_rls_public_read,
 )
@@ -34,6 +35,7 @@ class Check:
 CHECKS: tuple[Check, ...] = tuple(sorted((
     Check("credential.committed", "security", check_committed_credentials),
     Check("frontend.secret_in_bundle", "security", check_secret_in_bundle),
+    Check("platform.hardcoded_url", "portability", check_platform_urls),
     Check("service.no_health_endpoint", "operability", check_no_health_endpoint),
     Check("supabase.rls.disabled", "security", check_rls_disabled),
     Check("supabase.rls.permissive_write", "security", check_rls_permissive_write),

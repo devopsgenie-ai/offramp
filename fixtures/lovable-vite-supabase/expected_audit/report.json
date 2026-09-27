@@ -16,6 +16,11 @@
       "status": "found"
     },
     {
+      "check": "platform.hardcoded_url",
+      "reason": null,
+      "status": "found"
+    },
+    {
       "check": "service.no_health_endpoint",
       "reason": "no backend service in the repository",
       "status": "not_applicable"
@@ -77,6 +82,19 @@
       "title": "Policy \"Authenticated users can update tasks\" lets any signed-in user change rows in `public.tasks`"
     },
     {
+      "category": "portability",
+      "check": "platform.hardcoded_url",
+      "detail": "Model calls are sent to Lovable's AI gateway with a Lovable key. They stop working outside Lovable, and usage is billed through the platform.",
+      "evidence": [
+        "supabase/functions/send-digest/index.ts:6"
+      ],
+      "id": "platform.hardcoded_url.lovable-ai-gateway",
+      "related_gaps": [],
+      "remedy": "Call the model provider directly with your own key, from a server-side function.",
+      "severity": "medium",
+      "title": "AI calls go through Lovable's AI gateway"
+    },
+    {
       "category": "security",
       "check": "supabase.rls.public_read",
       "detail": "The policy \"Profiles are viewable by everyone\" lets anyone read every row of `public.profiles`. That can be intended -- a public catalogue, published posts -- but it also applies to every column, including any added later.",
@@ -88,6 +106,19 @@
       "remedy": "Confirm the table holds nothing private. If it does, restrict the policy, or move the private columns to a table with its own policies.",
       "severity": "medium",
       "title": "Every row in `public.profiles` is readable without signing in"
+    },
+    {
+      "category": "portability",
+      "check": "platform.hardcoded_url",
+      "detail": "`index.html` loads `gptengineer.js` from Lovable's CDN. Every visitor downloads a third-party script that the app does not need to run.",
+      "evidence": [
+        "index.html:7"
+      ],
+      "id": "platform.hardcoded_url.lovable-editor-script",
+      "related_gaps": [],
+      "remedy": "Remove the script tag from `index.html` once you no longer edit in Lovable.",
+      "severity": "low",
+      "title": "Lovable's editor script loads in production"
     }
   ],
   "not_visible": [
@@ -132,14 +163,14 @@
     "checks": {
       "clean": 1,
       "could_not_assess": 0,
-      "found": 4,
+      "found": 5,
       "not_applicable": 1
     },
     "findings": {
       "critical": 1,
       "high": 2,
-      "low": 0,
-      "medium": 1
+      "low": 1,
+      "medium": 2
     }
   }
 }

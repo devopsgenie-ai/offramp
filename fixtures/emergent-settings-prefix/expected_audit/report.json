@@ -16,6 +16,11 @@
       "status": "not_applicable"
     },
     {
+      "check": "platform.hardcoded_url",
+      "reason": null,
+      "status": "clean"
+    },
+    {
       "check": "service.no_health_endpoint",
       "reason": "routes could not be determined for `backend`: a router prefix is read from configuration at runtime",
       "status": "could_not_assess"
@@ -62,7 +67,7 @@
   "schema": "offramp.audit/1",
   "summary": {
     "checks": {
-      "clean": 1,
+      "clean": 2,
       "could_not_assess": 1,
       "found": 0,
       "not_applicable": 4

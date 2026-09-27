@@ -1,6 +1,6 @@
 # Readiness audit: recipe-notes (lovable)
 
-critical: 0  high: 0  medium: 0  low: 0 · 6 checks: 0 found, 2 clean, 1 not applicable, 3 could not assess
+critical: 0  high: 0  medium: 0  low: 0 · 7 checks: 0 found, 3 clean, 1 not applicable, 3 could not assess
 
 This report is produced by reading the repository only. It sends no request to the running application and holds no credential. Secret values are never copied into it; findings cite a file and line instead.
 
@@ -8,6 +8,7 @@ This report is produced by reading the repository only. It sends no request to t
 
 - `credential.committed`
 - `frontend.secret_in_bundle`
+- `platform.hardcoded_url`
 
 ## Could not assess
 

@@ -1,6 +1,6 @@
 # Readiness audit: widgets (emergent)
 
-critical: 2  high: 0  medium: 0  low: 0 · 6 checks: 1 found, 2 clean, 3 not applicable, 0 could not assess
+critical: 2  high: 0  medium: 0  low: 0 · 7 checks: 1 found, 3 clean, 3 not applicable, 0 could not assess
 
 This report is produced by reading the repository only. It sends no request to the running application and holds no credential. Secret values are never copied into it; findings cite a file and line instead.
 
@@ -25,6 +25,7 @@ This report is produced by reading the repository only. It sends no request to t
 ## Checked and clean
 
 - `frontend.secret_in_bundle`
+- `platform.hardcoded_url`
 - `service.no_health_endpoint`
 
 ## Not applicable
