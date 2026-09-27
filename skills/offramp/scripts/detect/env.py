@@ -25,7 +25,9 @@ BUILD_ARG_PREFIXES = ("REACT_APP_", "VITE_", "NEXT_PUBLIC_")
 DEV_ONLY_ENV = ("WDS_", "FAST_REFRESH", "CHOKIDAR_", "BROWSER", "GENERATE_SOURCEMAP")
 SECRET_NAME_RE = re.compile(r"(PASSWORD|PASSWD|SECRET|TOKEN|API_?KEY|CREDENTIAL|PRIVATE)")
 CREDENTIAL_URL_RE = re.compile(r"^[a-z][a-z0-9+.-]*://[^/\s:@]+:[^/\s@]+@")
-_JS_ENV_RE = re.compile(r"process\.env\.([A-Z_][A-Z0-9_]*)")
+# `process.env.X` for CRA and Node; `import.meta.env.X` for Vite, which is the modal
+# Lovable frontend (RFC-0002).
+_JS_ENV_RE = re.compile(r"(?:process|import\.meta)\.env\.([A-Z_][A-Z0-9_]*)")
 _JS_SUFFIXES = (".js", ".jsx", ".ts", ".tsx", ".mjs")
 
 
