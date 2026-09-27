@@ -99,3 +99,23 @@ def test_missing_repository_exits_two(tmp_path):
 def test_audit_writes_only_its_two_files(tmp_path):
     _run("fixtures/emergent-fastapi-mongo", "--out", tmp_path)
     assert sorted(p.name for p in tmp_path.iterdir()) == sorted(AUDIT_OUTPUT_NAMES)
+
+
+#: Checks whose `found` path is exercised by unit tests rather than a fixture, with why.
+FOUND_BY_UNIT_TEST = {
+    "service.no_health_endpoint": "tests/test_checks.py; no fixture backend lacks one",
+}
+
+
+def test_every_check_is_exercised_found_and_not_found_across_fixtures():
+    """RFC-0002, Testing: each check fires somewhere and stays quiet somewhere, so a
+    check that always says `found` or never does cannot pass unnoticed."""
+    from checks import CHECKS
+    seen: dict[str, set[str]] = {check.id: set() for check in CHECKS}
+    for fixture in FIXTURES:
+        for assessment in audit_repo(fixture)["assessments"]:
+            seen[assessment["check"]].add(assessment["status"])
+    for check, statuses in sorted(seen.items()):
+        if check not in FOUND_BY_UNIT_TEST:
+            assert "found" in statuses, f"{check} never fires on any fixture"
+        assert statuses - {"found"}, f"{check} fires on every fixture"

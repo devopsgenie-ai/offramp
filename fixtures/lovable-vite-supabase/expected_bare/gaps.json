@@ -1,0 +1,158 @@
+[
+  {
+    "confidence": "medium",
+    "depends_on": [],
+    "evidence": [
+      "src/integrations/supabase/client.ts:2"
+    ],
+    "evidence_scope": [],
+    "id": "datastore.supabase.mode",
+    "kind": "value",
+    "origin": "detector",
+    "pointers": [],
+    "proposed": "external",
+    "question": "Does the Supabase database stay where it is? The client points at a hosted Supabase project, so `external` -- keep it, and point the migrated application at it -- is proposed. `managed` moves the data to a Postgres instance you create; `in_cluster` runs Postgres yourself. The database also holds auth users and storage, which a plain Postgres instance does not replace.",
+    "severity": "blocking"
+  },
+  {
+    "confidence": "low",
+    "depends_on": [],
+    "evidence": [],
+    "evidence_scope": [],
+    "id": "delivery.gitops_repo_url",
+    "kind": "value",
+    "origin": "detector",
+    "pointers": [
+      "/delivery/gitops_repo_url"
+    ],
+    "proposed": null,
+    "question": "What is the URL of the *deployment* repository -- the one this generated tree will be committed to and that Argo CD watches? This is not the application's source repository, which is recorded separately as provenance.",
+    "severity": "blocking"
+  },
+  {
+    "confidence": "low",
+    "depends_on": [],
+    "evidence": [],
+    "evidence_scope": [],
+    "id": "delivery.image_registry",
+    "kind": "value",
+    "origin": "detector",
+    "pointers": [
+      "/delivery/image_registry"
+    ],
+    "proposed": null,
+    "question": "Which container registry will hold the built images? The overlay writes image references against it, so nothing can be pulled until it is set. Example: ghcr.io/your-org.",
+    "severity": "blocking"
+  },
+  {
+    "confidence": "low",
+    "depends_on": [],
+    "evidence": [],
+    "evidence_scope": [],
+    "id": "delivery.ingress_class",
+    "kind": "value",
+    "origin": "detector",
+    "pointers": [
+      "/delivery/ingress_class"
+    ],
+    "proposed": null,
+    "question": "Which ingress controller serves this cluster? The Ingress needs its class name. Common answers are nginx, traefik and alb.",
+    "severity": "blocking"
+  },
+  {
+    "confidence": "medium",
+    "depends_on": [],
+    "evidence": [],
+    "evidence_scope": [],
+    "id": "environment.production.namespace",
+    "kind": "value",
+    "origin": "detector",
+    "pointers": [
+      "/environments/0/namespace"
+    ],
+    "proposed": null,
+    "question": "Which Kubernetes namespace does the `production` overlay deploy into? Every generated object is namespaced by it.",
+    "severity": "blocking"
+  },
+  {
+    "confidence": "low",
+    "depends_on": [],
+    "evidence": [],
+    "evidence_scope": [],
+    "id": "delivery.image_tag",
+    "kind": "value",
+    "origin": "detector",
+    "pointers": [
+      "/delivery/image_tag"
+    ],
+    "proposed": null,
+    "question": "Which image tag should the overlay reference? CI normally answers this on every build rather than a person answering it once, and the answers file records that it was accepted by CI rather than by a human.",
+    "severity": "important"
+  },
+  {
+    "confidence": "high",
+    "depends_on": [],
+    "evidence": [],
+    "evidence_scope": [],
+    "id": "service.web.probes",
+    "kind": "action",
+    "origin": "detector",
+    "pointers": [],
+    "proposed": null,
+    "question": "`web` exposes no health endpoint, so no liveness or readiness probe can be generated for it. Add one -- a handler that returns 200 without touching the database is enough -- and confirm here. Without it Kubernetes cannot tell a started container from a working one, and a rollout will report success while the service is broken. No path is proposed because pointing a probe at a business endpoint restarts a healthy container whenever that endpoint is slow.",
+    "severity": "important"
+  },
+  {
+    "confidence": "medium",
+    "depends_on": [],
+    "evidence": [
+      "package.json"
+    ],
+    "evidence_scope": [
+      "."
+    ],
+    "id": "service.web.runtime.version",
+    "kind": "value",
+    "origin": "detector",
+    "pointers": [
+      "/services/web/runtime/version"
+    ],
+    "proposed": "20",
+    "question": "Which Node version builds `.`? Neither `engines.node` nor .nvmrc declares one, so the build image tag would be a guess.",
+    "severity": "important"
+  },
+  {
+    "confidence": "medium",
+    "depends_on": [],
+    "evidence": [
+      ".env:1"
+    ],
+    "evidence_scope": [
+      "."
+    ],
+    "id": "service.web.env.VITE_SUPABASE_PROJECT_ID",
+    "kind": "value",
+    "origin": "detector",
+    "pointers": [],
+    "proposed": null,
+    "question": "`VITE_SUPABASE_PROJECT_ID` is set in `.env` but no module in `.` reads it. It is probably dead configuration left by the platform. Answer with a value to carry it into the deployment anyway, or say so and it will be dropped.",
+    "severity": "cosmetic"
+  },
+  {
+    "confidence": "medium",
+    "depends_on": [],
+    "evidence": [
+      ".env:2"
+    ],
+    "evidence_scope": [
+      "."
+    ],
+    "id": "service.web.env.VITE_SUPABASE_URL",
+    "kind": "value",
+    "origin": "detector",
+    "pointers": [],
+    "proposed": null,
+    "question": "`VITE_SUPABASE_URL` is set in `.env` but no module in `.` reads it. It is probably dead configuration left by the platform. Answer with a value to carry it into the deployment anyway, or say so and it will be dropped.",
+    "severity": "cosmetic"
+  }
+]

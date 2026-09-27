@@ -17,6 +17,9 @@ from typing import Callable
 from checks.credentials import check_committed_credentials
 from checks.frontend import check_secret_in_bundle
 from checks.health import check_no_health_endpoint
+from checks.supabase import (
+    check_rls_disabled, check_rls_permissive_write, check_rls_public_read,
+)
 from findings import FINDING_SEVERITY_ORDER, Assessment, Finding
 
 
@@ -32,6 +35,9 @@ CHECKS: tuple[Check, ...] = tuple(sorted((
     Check("credential.committed", "security", check_committed_credentials),
     Check("frontend.secret_in_bundle", "security", check_secret_in_bundle),
     Check("service.no_health_endpoint", "operability", check_no_health_endpoint),
+    Check("supabase.rls.disabled", "security", check_rls_disabled),
+    Check("supabase.rls.permissive_write", "security", check_rls_permissive_write),
+    Check("supabase.rls.public_read", "security", check_rls_public_read),
 ), key=lambda check: check.id))
 
 

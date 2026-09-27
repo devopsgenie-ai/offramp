@@ -19,6 +19,21 @@
       "check": "service.no_health_endpoint",
       "reason": "routes could not be determined for `backend`: a router prefix is read from configuration at runtime",
       "status": "could_not_assess"
+    },
+    {
+      "check": "supabase.rls.disabled",
+      "reason": "the application does not use Supabase",
+      "status": "not_applicable"
+    },
+    {
+      "check": "supabase.rls.permissive_write",
+      "reason": "the application does not use Supabase",
+      "status": "not_applicable"
+    },
+    {
+      "check": "supabase.rls.public_read",
+      "reason": "the application does not use Supabase",
+      "status": "not_applicable"
     }
   ],
   "findings": [],
@@ -50,7 +65,7 @@
       "clean": 1,
       "could_not_assess": 1,
       "found": 0,
-      "not_applicable": 1
+      "not_applicable": 4
     },
     "findings": {
       "critical": 0,

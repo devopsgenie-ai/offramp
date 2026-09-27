@@ -1,0 +1,92 @@
+{
+  "app": {
+    "commit": null,
+    "name": "booking-desk",
+    "platform": "lovable"
+  },
+  "assessments": [
+    {
+      "check": "credential.committed",
+      "reason": null,
+      "status": "clean"
+    },
+    {
+      "check": "frontend.secret_in_bundle",
+      "reason": null,
+      "status": "clean"
+    },
+    {
+      "check": "service.no_health_endpoint",
+      "reason": "no backend service in the repository",
+      "status": "not_applicable"
+    },
+    {
+      "check": "supabase.rls.disabled",
+      "reason": "a migration could not be replayed, so any answer would be partial: supabase/migrations/20260203090000_per_tenant.sql:3: do block touching tables or RLS",
+      "status": "could_not_assess"
+    },
+    {
+      "check": "supabase.rls.permissive_write",
+      "reason": "a migration could not be replayed, so any answer would be partial: supabase/migrations/20260203090000_per_tenant.sql:3: do block touching tables or RLS",
+      "status": "could_not_assess"
+    },
+    {
+      "check": "supabase.rls.public_read",
+      "reason": "a migration could not be replayed, so any answer would be partial: supabase/migrations/20260203090000_per_tenant.sql:3: do block touching tables or RLS",
+      "status": "could_not_assess"
+    }
+  ],
+  "findings": [],
+  "not_visible": [
+    {
+      "how": "Review them in the platform's project settings before relying on this report.",
+      "topic": "Settings made in the platform's dashboard",
+      "why": "Environment variables, secrets and domains configured outside the repository."
+    },
+    {
+      "how": "Run a history-wide secret scanner, for example gitleaks or trufflehog.",
+      "topic": "Git history",
+      "why": "This audit reads the files as they are now. A secret removed in a later commit is still in the history."
+    },
+    {
+      "how": "List them, and remove anyone who no longer needs access.",
+      "topic": "Who has access",
+      "why": "Members of the platform account, collaborators on the repository, and anyone with database dashboard access."
+    },
+    {
+      "how": "Check the database provider's backup settings and do one test restore.",
+      "topic": "Backups",
+      "why": "Whether the database is backed up, and whether a restore has ever been tested."
+    },
+    {
+      "how": "Run the Security Advisor in the Supabase dashboard and fix what it reports.",
+      "topic": "Row-level security changed in the Supabase dashboard",
+      "why": "Policies and RLS settings created in the dashboard never appear in `supabase/migrations/`, so the RLS checks cannot see them."
+    },
+    {
+      "how": "Review Authentication settings in the Supabase dashboard. Open sign-up makes every `authenticated` policy effectively public.",
+      "topic": "Supabase auth settings",
+      "why": "Whether anyone can sign up, whether email confirmation is required, and which redirect URLs are allowed."
+    },
+    {
+      "how": "Review Storage policies in the Supabase dashboard.",
+      "topic": "Storage bucket policies",
+      "why": "Which buckets are public and who can upload."
+    }
+  ],
+  "schema": "offramp.audit/1",
+  "summary": {
+    "checks": {
+      "clean": 2,
+      "could_not_assess": 3,
+      "found": 0,
+      "not_applicable": 1
+    },
+    "findings": {
+      "critical": 0,
+      "high": 0,
+      "low": 0,
+      "medium": 0
+    }
+  }
+}
