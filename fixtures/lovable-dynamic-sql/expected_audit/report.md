@@ -11,9 +11,9 @@ This report is produced by reading the repository only. It sends no request to t
 
 ## Could not assess
 
-- `supabase.rls.disabled`: a migration could not be replayed, so any answer would be partial: supabase/migrations/20260203090000_per_tenant.sql:3: do block touching tables or RLS
-- `supabase.rls.permissive_write`: a migration could not be replayed, so any answer would be partial: supabase/migrations/20260203090000_per_tenant.sql:3: do block touching tables or RLS
-- `supabase.rls.public_read`: a migration could not be replayed, so any answer would be partial: supabase/migrations/20260203090000_per_tenant.sql:3: do block touching tables or RLS
+- `supabase.rls.disabled`: a migration could not be replayed, so any answer would be partial: supabase/migrations/20260203090000_per_tenant.sql:3: do block with dynamic SQL touching tables or RLS
+- `supabase.rls.permissive_write`: a migration could not be replayed, so any answer would be partial: supabase/migrations/20260203090000_per_tenant.sql:3: do block with dynamic SQL touching tables or RLS
+- `supabase.rls.public_read`: a migration could not be replayed, so any answer would be partial: supabase/migrations/20260203090000_per_tenant.sql:3: do block with dynamic SQL touching tables or RLS
 
 ## Not applicable
 

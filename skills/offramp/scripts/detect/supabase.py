@@ -16,7 +16,7 @@ import re
 from pathlib import Path
 
 from spec import Datastore, Evidence, Gap, Service, gap_id
-from walk import rel, walk_files
+from walk import read_source, rel, walk_files
 
 PACKAGE = "@supabase/supabase-js"
 _SOURCE_SUFFIXES = (".js", ".jsx", ".ts", ".tsx", ".mjs")
@@ -29,7 +29,7 @@ def _declares(directory: Path) -> bool:
     if not manifest.is_file():
         return False
     try:
-        package = json.loads(manifest.read_text(encoding="utf-8"))
+        package = json.loads(read_source(manifest))
     except ValueError:
         return False
     return PACKAGE in {**package.get("dependencies", {}), **package.get("devDependencies", {})}

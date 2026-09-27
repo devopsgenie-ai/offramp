@@ -116,7 +116,8 @@ def test_anon_insert_with_check_true_is_permissive_write(tmp_path):
                                "to anon with check (true);"})
     findings, _ = _by_check(tmp_path)
     found = [f for f in findings if f.check == "supabase.rls.permissive_write"]
-    assert [f.severity for f in found] == ["high"]
+    # medium, not high: an anonymous INSERT is usually a form (see test_corpus_hardening)
+    assert [f.severity for f in found] == ["medium"]
     assert "without signing in" in found[0].detail
 
 

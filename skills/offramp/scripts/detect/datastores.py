@@ -17,7 +17,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from spec import Datastore, Evidence, Gap, Service, gap_id
-from walk import rel, walk_files
+from walk import read_source, rel, walk_files
 
 #: (kind, import roots, dependency names). Sorted by kind so output order is fixed.
 KNOWN_DATASTORES = (
@@ -56,7 +56,7 @@ def _declared_dependencies(directory: Path) -> set[str]:
     if not requirements.is_file():
         return set()
     found = set()
-    for line in requirements.read_text(encoding="utf-8").splitlines():
+    for line in read_source(requirements).splitlines():
         stripped = line.split("#", 1)[0].strip()
         if stripped and not stripped.startswith("-"):
             found.add(re.split(r"[=<>!~\[]", stripped, maxsplit=1)[0].strip().lower())
@@ -80,7 +80,7 @@ def detect_datastores(
                 declared.setdefault(kind, set()).update(matched)
 
         for path in walk_files(directory, suffixes=(".py",)):
-            roots = _imported_roots(path.read_text(encoding="utf-8"))
+            roots = _imported_roots(read_source(path))
             for kind, import_roots, _ in KNOWN_DATASTORES:
                 if roots & set(import_roots):
                     entry = used.setdefault(kind, {"services": set(), "evidence": []})

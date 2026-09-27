@@ -16,58 +16,82 @@ Their safety comes from server-side rules, which is what the RLS checks look at.
 
 from __future__ import annotations
 
-import base64
-import json
-import re
 from pathlib import Path
 
-from checks.known import PUBLIC_BY_DESIGN, SECRET_LITERAL_PREFIXES, SECRET_NAME
+from checks.known import SECRET_NAME
+from checks.secrets import is_public_by_design, secret_kind
 from detect.env import BUILD_ARG_PREFIXES
 from findings import Assessment, Finding
-from walk import rel, walk_files
+from walk import read_source, rel, walk_files
 
 CHECK = "frontend.secret_in_bundle"
 _SOURCE_SUFFIXES = (".js", ".jsx", ".ts", ".tsx", ".mjs", ".vue", ".svelte", ".html")
-_JWT_RE = re.compile(r"eyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]+")
-_TOKEN_RE = re.compile(r"[A-Za-z0-9_\-]{12,}")
+
+#: Top-level directories of a frontend service that do not ship to the browser. The
+#: corpus put service_role keys in `supabase/functions/` and `scripts/` -- committed and
+#: critical, but server-side, so reporting them as "shipped to every browser" was false.
+NOT_BUNDLED = frozenset({
+    "api", "backend", "cypress", "docs", "e2e", "functions", "netlify", "playwright",
+    "scripts", "server", "supabase", "test", "tests", "__tests__",
+})
 
 
-def _unprefixed(name: str) -> str:
-    for prefix in BUILD_ARG_PREFIXES:
-        if name.startswith(prefix):
-            return name[len(prefix):]
-    return name
+#: File-name markers for code that never ships: tests, type declarations, and the
+#: `.server.` convention frameworks such as TanStack Start and Remix use for server-only code.
+_NOT_SHIPPED_MARKERS = (".test.", ".spec.", ".d.ts", ".server.")
 
 
-def _jwt_role(token: str) -> "str | None":
-    try:
-        payload = token.split(".")[1]
-        decoded = base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4))
-        role = json.loads(decoded).get("role")
-    except (ValueError, IndexError, AttributeError):
-        return None
-    return role if isinstance(role, str) else None
+def _service_dir(root: Path, service) -> Path:
+    return root if service.build.context == "." else root / service.build.context
 
 
-def _first_read(root: Path, directory: Path, key: str) -> "str | None":
-    for path in walk_files(directory, suffixes=_SOURCE_SUFFIXES):
-        text = path.read_text(encoding="utf-8", errors="ignore")
-        for number, line in enumerate(text.splitlines(), start=1):
+def bundle_files(root: Path, scan) -> list[Path]:
+    """Files that plausibly end up in a frontend bundle: under a web service, outside
+    server-side directories, other services, tests and root-level build config."""
+    others = {_service_dir(root, s) for s in scan.appspec.services if s.role != "web"}
+    files: list[Path] = []
+    for service in scan.appspec.services:
+        if service.role != "web":
+            continue
+        directory = _service_dir(root, service)
+        for path in walk_files(directory, suffixes=_SOURCE_SUFFIXES):
+            parts = path.relative_to(directory).parts
+            if parts[0] in NOT_BUNDLED or any(o in path.parents for o in others):
+                continue
+            # At the root of a frontend, only index.html ships. Everything else there is
+            # build config or a one-off node script -- the corpus had migrate-data.mjs.
+            if len(parts) == 1 and path.suffix != ".html":
+                continue
+            if any(marker in path.name for marker in _NOT_SHIPPED_MARKERS):
+                continue
+            files.append(path)
+    return sorted(set(files))
+
+
+def _first_read(root: Path, files: list[Path], key: str) -> "str | None":
+    for path in files:
+        for number, line in enumerate(read_source(path).splitlines(), start=1):
             if key in line:
                 return f"{rel(root, path)}:{number}"
     return None
 
 
-def _named_secrets(root: Path, service) -> list[Finding]:
+def _named_secrets(root: Path, service, files: list[Path]) -> list[Finding]:
     findings: list[Finding] = []
-    directory = root / service.build.context if service.build.context != "." else root
     for var in service.env:
         if var.binding != "build_arg":
             continue
-        bare = _unprefixed(var.name)
-        if PUBLIC_BY_DESIGN.search(bare) or not SECRET_NAME.search(bare):
+        if is_public_by_design(var.name, BUILD_ARG_PREFIXES):
             continue
-        location = _first_read(root, directory, var.name)
+        bare = var.name
+        for prefix in BUILD_ARG_PREFIXES:
+            bare = bare.removeprefix(prefix)
+        if not SECRET_NAME.search(bare):
+            continue
+        location = _first_read(root, files, var.name)
+        if location is None:
+            # Only server-side files read it, so nothing puts it in the bundle.
+            continue
         findings.append(Finding(
             id=f"{CHECK}.{service.name}.{var.name}",
             check=CHECK,
@@ -85,28 +109,21 @@ def _named_secrets(root: Path, service) -> list[Finding]:
                 "behind a server-side function. Rebuilding with a new value does not help: "
                 "the new value is baked into the new bundle too."
             ),
-            evidence=[location] if location else [],
+            evidence=[location],
         ))
     return findings
 
 
-def _proven_secrets(root: Path, service) -> list[Finding]:
+def _proven_secrets(root: Path, files: list[Path]) -> list[Finding]:
     findings: list[Finding] = []
-    directory = root / service.build.context if service.build.context != "." else root
-    for path in walk_files(directory, suffixes=_SOURCE_SUFFIXES):
+    for path in files:
         relative = rel(root, path)
-        text = path.read_text(encoding="utf-8", errors="ignore")
-        for number, line in enumerate(text.splitlines(), start=1):
-            kind = None
-            if any(_jwt_role(token) == "service_role" for token in _JWT_RE.findall(line)):
-                kind = "a Supabase `service_role` key"
-            elif any(token.startswith(SECRET_LITERAL_PREFIXES)
-                     for token in _TOKEN_RE.findall(line)):
-                kind = "a secret API key"
+        for number, line in enumerate(read_source(path).splitlines(), start=1):
+            kind = secret_kind(line)
             if kind is None:
                 continue
             findings.append(Finding(
-                id=f"{CHECK}.{service.name}.{relative.replace('/', '.')}.{number}",
+                id=f"{CHECK}.{relative.replace('/', '.')}.{number}",
                 check=CHECK,
                 category="security",
                 severity="critical",
@@ -131,8 +148,9 @@ def check_secret_in_bundle(root: Path, scan) -> tuple[list[Finding], Assessment]
     if not web:
         return [], Assessment(check=CHECK, status="not_applicable",
                               reason="no frontend service in the repository")
+    files = bundle_files(root, scan)
     findings: list[Finding] = []
     for service in web:
-        findings.extend(_named_secrets(root, service))
-        findings.extend(_proven_secrets(root, service))
+        findings.extend(_named_secrets(root, service, files))
+    findings.extend(_proven_secrets(root, files))
     return findings, Assessment(check=CHECK, status="found" if findings else "clean")

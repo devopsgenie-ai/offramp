@@ -146,3 +146,58 @@ def test_irrelevant_statements_are_ignored(tmp_path):
     result = replay(root)
     assert result.unparseable == []
     assert result.tables == {}
+
+
+def test_idempotent_do_block_is_replayed(tmp_path):
+    """The shape the corpus showed most often: a DO block whose only control flow is
+    an existence guard. Its end state does not depend on the guard, so it is replayed."""
+    root = _migrations(tmp_path, {"001.sql": (
+        "create table public.t (id int);\n"
+        "DO $$\nBEGIN\n"
+        "  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'open') THEN\n"
+        "    CREATE POLICY \"open\" ON public.t FOR ALL TO anon USING (true) WITH CHECK (true);\n"
+        "  END IF;\n"
+        "  ALTER TABLE public.t ENABLE ROW LEVEL SECURITY;\n"
+        "END $$;\n"
+    )})
+    result = replay(root)
+    assert result.unparseable == []
+    table = result.tables["public.t"]
+    assert table.rls is True
+    assert table.policies["open"].using == "true"
+    assert table.policies["open"].evidence == "supabase/migrations/001.sql:5"
+
+
+def test_do_block_with_exception_handler_is_replayed(tmp_path):
+    root = _migrations(tmp_path, {"001.sql": (
+        "create table t (id int);"
+        "do $$ begin create policy p on t for select using (true); "
+        "exception when duplicate_object then null; end $$;"
+    )})
+    result = replay(root)
+    assert result.unparseable == []
+    assert "p" in result.tables["public.t"].policies
+
+
+def test_do_block_that_only_adds_a_constraint_is_ignored(tmp_path):
+    root = _migrations(tmp_path, {"001.sql": (
+        "do $$ begin alter table t add constraint c check (x > 0); "
+        "exception when duplicate_object then null; end $$;"
+    )})
+    assert replay(root).unparseable == []
+
+
+def test_do_block_with_dynamic_sql_stays_unparseable(tmp_path):
+    root = _migrations(tmp_path, {"001.sql": (
+        "do $$ declare pol record; begin for pol in select policyname from pg_policies "
+        "loop execute format('drop policy %I on t', pol.policyname); end loop; end $$;"
+    )})
+    assert len(replay(root).unparseable) == 1
+
+
+def test_do_block_with_other_conditions_stays_unparseable(tmp_path):
+    root = _migrations(tmp_path, {"001.sql": (
+        "do $$ begin if current_setting('app.env') = 'prod' then "
+        "alter table t enable row level security; end if; end $$;"
+    )})
+    assert len(replay(root).unparseable) == 1

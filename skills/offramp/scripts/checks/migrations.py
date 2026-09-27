@@ -22,6 +22,11 @@ from walk import rel
 
 MIGRATIONS_DIR = Path("supabase") / "migrations"
 
+#: A migration's run order comes from the version number its name starts with: the
+#: Supabase CLI writes `<version>_<name>.sql`, Lovable writes `<version>-<uuid>.sql`. A
+#: file with no leading version has no knowable place in that order.
+_TIMESTAMPED = re.compile(r"^\d+(?:[_-][^/]*)?\.sql$")
+
 _IDENT = r'(?:"[^"]+"|[a-z_][a-z0-9_$]*)'
 _QNAME = rf"({_IDENT}(?:\s*\.\s*{_IDENT})?)"
 
@@ -45,6 +50,15 @@ _DROP_POLICY = re.compile(
 _TOUCHES = re.compile(
     r"\b(?:create|alter|drop)\s+(?:table|policy)\b|\brow\s+level\s+security\b", re.S)
 _DO_BLOCK = re.compile(r"^do\b")
+#: What makes a DO block matter to the RLS checks. Narrower than _TOUCHES: a DO block that
+#: only adds a constraint (`alter table ... add constraint`) changes no access control.
+_DO_TOUCHES = re.compile(
+    r"\bcreate\s+(?:unlogged\s+)?table\b|\bdrop\s+table\b|\b(?:create|alter|drop)\s+policy\b"
+    r"|\brow\s+level\s+security\b|\brename\s+to\b", re.S)
+_DYNAMIC = re.compile(r"\b(?:execute|loop|elsif|else|perform)\b")
+_GUARD = re.compile(r"^(?:begin\s+)?if\s+(?:not\s+)?exists\s*(?=\()", re.S)
+_NOISE = re.compile(
+    r"^(?:end(?:\s+if)?|null|exception\s+when\s+[a-z_\s]+\s+then\s+null|declare\b.*)$", re.S)
 _DOLLAR = re.compile(r"\$[A-Za-z0-9_]*\$")
 
 
@@ -73,6 +87,7 @@ class Replay:
     files: list[str]
     tables: dict[str, Table]
     unparseable: list[str]     # "path:line: reason"
+    untimestamped: list[str] = field(default_factory=list)   # order unknown
 
 
 def split_statements(text: str) -> list[tuple[str, str, int]]:
@@ -243,7 +258,7 @@ def _apply(state: _State, original: str, masked: str, where: str, line: int) -> 
         return re.match(pattern.pattern, flat, re.I | re.S)
 
     if _DO_BLOCK.match(lowered):
-        return "do block touching tables or RLS" if _TOUCHES.search(original.lower()) else None
+        return _apply_do(state, original, where, line)
     if _TEMP_TABLE.match(lowered):
         return None
     if found := match(_CREATE_TABLE):
@@ -274,6 +289,10 @@ def _apply(state: _State, original: str, masked: str, where: str, line: int) -> 
         for name in _split_names(found.group(1)):
             state.tables.pop(_qualify(name), None)
         return None
+    if re.match(r"^create\s+policy\s+if\s+not\s+exists\b", lowered):
+        # Seen repeatedly in the corpus. PostgreSQL has no such syntax, so the migration
+        # fails when applied and what the database holds afterwards is unknowable.
+        return "CREATE POLICY IF NOT EXISTS is not valid PostgreSQL, so this migration fails"
     if found := match(_CREATE_POLICY):
         parsed = _parse_policy_tail(found.group(3))
         if parsed is None:
@@ -292,17 +311,85 @@ def _apply(state: _State, original: str, masked: str, where: str, line: int) -> 
     return None
 
 
+def _apply_do(state: _State, original: str, where: str, line: int) -> str | None:
+    """Replay a DO block when its only control flow is an existence guard.
+
+    The corpus showed Lovable wrapping most policy statements in
+    `IF NOT EXISTS (SELECT ... FROM pg_policies ...) THEN CREATE POLICY ...; END IF;`.
+    The end state of that block does not depend on the guard, so its inner statements
+    are replayed as written. Anything dynamic -- EXECUTE, a loop, another condition --
+    stays unparseable: its effect cannot be known without running it.
+    """
+    tag = _DOLLAR.search(original)
+    if tag is None:
+        return "do block not understood"
+    close = original.find(tag.group(0), tag.end())
+    body = original[tag.end():close if close != -1 else len(original)]
+    lowered_body = body.lower()
+    if not _DO_TOUCHES.search(lowered_body):
+        return None
+    if _DYNAMIC.search(re.sub(r"'(?:[^']|'')*'", "''", lowered_body)):
+        return "do block with dynamic SQL touching tables or RLS"
+    path = where.rsplit(":", 1)[0]
+    first_line = line + original[:tag.end()].count("\n")
+    for inner_original, inner_masked, inner_line in split_statements(body):
+        statement = re.sub(r"\s+", " ", inner_masked).strip()
+        inner_start = inner_line
+        while True:
+            lowered = statement.lower()
+            if lowered.startswith("begin "):
+                statement = statement[len("begin "):].strip()
+                continue
+            guard = _GUARD.match(lowered)
+            if guard is None:
+                break
+            group = _balanced(statement, guard.end())
+            if group is None:
+                return "do block not understood"
+            rest = statement[group[1]:].strip()
+            if not rest.lower().startswith("then"):
+                return "do block not understood"
+            statement = rest[len("then"):].strip()
+        lowered = statement.lower()
+        if not statement or _NOISE.match(lowered):
+            continue
+        if lowered.startswith("if ") or lowered.startswith("do "):
+            if _DO_TOUCHES.search(lowered):
+                return "do block with a condition that is not an existence check"
+            continue
+        at = first_line + inner_start - 1 + _line_offset(inner_original, statement)
+        reason = _apply(state, statement, statement, f"{path}:{at}", at)
+        if reason:
+            return reason
+    return None
+
+
+def _line_offset(original: str, statement: str) -> int:
+    """Lines between the start of `original` and where `statement` begins in it, so a
+    finding cites the CREATE POLICY line rather than the BEGIN or IF that wraps it."""
+    words = statement.split()[:2]
+    if not words:
+        return 0
+    pattern = r"\s+".join(re.escape(word) for word in words)
+    matches = list(re.finditer(pattern, original, re.I))
+    return original[:matches[-1].start()].count("\n") if matches else 0
+
+
 def _split_names(names: str) -> list[str]:
     """Split a comma-separated name list, ignoring commas inside double quotes."""
     return [item for item in re.split(r'\s*,\s*(?=(?:[^"]*"[^"]*")*[^"]*$)', names) if item]
 
 
-def migration_files(root: Path) -> list[Path]:
+def _sql_files(root: Path) -> list[Path]:
     directory = root / MIGRATIONS_DIR
     if not directory.is_dir():
         return []
     return sorted(path for path in directory.iterdir()
                   if path.is_file() and path.suffix == ".sql")
+
+
+def migration_files(root: Path) -> list[Path]:
+    return [path for path in _sql_files(root) if _TIMESTAMPED.match(path.name)]
 
 
 def replay(root: Path) -> Replay:
@@ -316,5 +403,7 @@ def replay(root: Path) -> Replay:
             reason = _apply(state, original, masked, f"{relative}:{line}", line)
             if reason:
                 unparseable.append(f"{relative}:{line}: {reason}")
+    untimestamped = [rel(root, path) for path in _sql_files(root)
+                     if not _TIMESTAMPED.match(path.name)]
     return Replay(files=[rel(root, path) for path in files], tables=state.tables,
-                  unparseable=unparseable)
+                  unparseable=unparseable, untimestamped=untimestamped)
