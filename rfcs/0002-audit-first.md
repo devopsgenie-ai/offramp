@@ -129,9 +129,9 @@ only when nothing in the repository uses Supabase.
 | `credential.committed` | security | critical | The existing detector's condition. Reuses it; no new detection. |
 | `frontend.secret_in_bundle` | security | high / critical | **High:** a build-time variable's name says it is a secret. The value may be set in a dashboard and absent from the repository, so the finding asks the user to confirm. **Critical:** the value proves it, as a Supabase JWT with role `service_role` or a known secret-key prefix in frontend source. Names that are public by design (anon, publishable, Firebase web keys, Maps) are data in one file and do not produce findings. |
 | `supabase.rls.disabled` | security | critical | A table created in `supabase/migrations/` never has `enable row level security` applied in any later migration, and is not dropped later. |
-| `supabase.rls.permissive_write` | security | high | A policy for `insert`, `update`, `delete` or `all`, granted to `anon`, `public` or `authenticated`, has a `using` or `with check` clause that is literally `true`. |
+| `supabase.rls.permissive_write` | security | high / medium | A permissive policy for `insert`, `update`, `delete` or `all`, granted to `anon`, `public` or `authenticated`, has a `using` or `with check` clause that is literally `true`. **Medium** when the policy is `insert` only: the recall corpus showed these are mostly contact and waitlist forms. |
 | `supabase.rls.public_read` | security | medium | A `select` policy granted to `anon` or `public` is `using (true)`. It may be intended; the finding asks the user to confirm. |
-| `platform.hardcoded_url` | portability | medium | Source contains a literal URL on a platform-owned domain. These URLs break silently after a move. |
+| `platform.hardcoded_url` | portability | medium / low | Source contains a URL on a platform-owned domain. These URLs break silently after a move. Examples are Emergent-managed sign-in, a model gateway billed through the platform, and a frontend built against its preview URL. Editor scripts and default social images are low. Each rule was confirmed in the recall corpus (#17). |
 | `service.no_health_endpoint` | operability | low | A backend service has no health route, reusing the probe detector's gap condition. |
 
 Notes that bound these checks:
