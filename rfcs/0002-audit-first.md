@@ -118,14 +118,16 @@ finding once and links to the gap. Gap counts do not change.
 
 ### Checks in the first implementation
 
-Each check is a pure function `(appspec, repo_view) -> (findings, assessment)`, registered
-in one table with its id, category and the scenarios it applies to. `repo_view` is the
-read-only walk from `walk.py`, and checks read files only through it.
+Each check is a pure function `(root, scan) -> (findings, assessment)`, registered in one
+table with its id and category. `scan` is the `scan` result, meaning the AppSpec and its
+gaps. Checks read the repository only through `walk.py`. Applicability is decided from
+data, not from the detected platform. For example, the RLS checks are `not_applicable`
+only when nothing in the repository uses Supabase.
 
 | Check | Category | Severity | Fires when |
 |---|---|---|---|
 | `credential.committed` | security | critical | The existing detector's condition. Reuses it; no new detection. |
-| `frontend.secret_in_bundle` | security | critical | An `EnvVar` with `binding: build_arg` has a name that `is_sensitive` accepts, or frontend source contains a Supabase key whose JWT payload role is `service_role`. |
+| `frontend.secret_in_bundle` | security | high / critical | **High:** a build-time variable's name says it is a secret. The value may be set in a dashboard and absent from the repository, so the finding asks the user to confirm. **Critical:** the value proves it, as a Supabase JWT with role `service_role` or a known secret-key prefix in frontend source. Names that are public by design (anon, publishable, Firebase web keys, Maps) are data in one file and do not produce findings. |
 | `supabase.rls.disabled` | security | critical | A table created in `supabase/migrations/` never has `enable row level security` applied in any later migration, and is not dropped later. |
 | `supabase.rls.permissive_write` | security | high | A policy for `insert`, `update`, `delete` or `all`, granted to `anon`, `public` or `authenticated`, has a `using` or `with check` clause that is literally `true`. |
 | `supabase.rls.public_read` | security | medium | A `select` policy granted to `anon` or `public` is `using (true)`. It may be intended; the finding asks the user to confirm. |
@@ -139,7 +141,11 @@ Notes that bound these checks:
   `create table`, `alter table … enable row level security`, `drop table`,
   `alter table … rename`, `create policy` and `drop policy`. A migration it cannot parse
   makes the whole check `could_not_assess` for that repository. It never produces a
-  partial answer.
+  partial answer. The matcher is hand-written and uses only the standard library, like the
+  rest of `scan`. Masking string literals and dollar-quoted bodies before classifying a
+  statement handles quoting and comments. A `DO` block runs at migration time, so if one
+  touches tables or RLS it is unparseable. Function bodies run later and are not
+  replayed.
 - **Dashboard changes are invisible, and the report says so.** A policy created in the
   Supabase dashboard never appears in `supabase/migrations/`. For this reason every report
   includes a fixed, per-scenario **"not visible from the repository"** section. It lists
@@ -162,11 +168,17 @@ Notes that bound these checks:
 what the checks consume:
 
 - a Vite service detector (`role: web`, build output, `VITE_*` env reads as `build_arg`)
-- a Supabase detector: the client file, `supabase/config.toml`, `supabase/migrations/` and
-  `supabase/functions/`, recorded as a `Datastore` with `kind: postgres` and
-  `mode: external`, plus the migration set that the RLS checks replay
-- edge functions under `supabase/functions/` are recorded as present, with their
-  `Deno.env.get` reads, but they are not modelled as services yet
+- a Supabase detector that works from usage, meaning an import of `@supabase/supabase-js`.
+  It records a `Datastore` named `supabase` with `kind: postgres`. Following RFC-0001,
+  `mode` is never defaulted: a `*.supabase.co` client URL makes `external` the *proposed*
+  answer to a `datastore.supabase.mode` gap. A declared dependency with no import becomes
+  a `disputed` gap.
+- a service at the repository root is named by its role (`web`, `api`). The modal Vite
+  app sits at the root, and naming it after the directory would make the AppSpec depend
+  on the checkout path.
+- edge functions under `supabase/functions/` are not modelled in this RFC. Recording
+  them would change the AppSpec schema for every scenario, and nothing in the audit
+  needs them yet.
 
 Detectors follow RFC-0001 unchanged. They walk the tree, they have no model and no network,
 and they emit gaps rather than defaults.
@@ -284,10 +296,12 @@ fixtures are new, with both trees.
   asserts that the emitted finding ids match it exactly, with none missing and none extra.
   An extra finding is a false positive. For an audit that is the more expensive failure,
   because a report that raises false alarms teaches its reader to ignore it.
-- **Every check is exercised three ways.** For each check, some fixture makes it fire, some
-  fixture assesses it `clean`, and some fixture makes it `could_not_assess`. The last one
-  guards against the most tempting bug, a check that silently reports `clean` when it could
-  not look.
+- **Every check fires somewhere and stays quiet somewhere.** A test requires each check to
+  report `found` on at least one fixture and a different status on another. A check whose
+  `found` path is covered only by unit tests must be listed in the test with the reason.
+  Every check that can return `could_not_assess` has a fixture that makes it do so, which
+  guards against the most tempting bug: a check that silently reports `clean` when it
+  could not look.
 - **Migration replay fixtures carry the awkward cases on purpose:** RLS enabled in a later
   migration (must not fire), a table dropped after creation (must not fire), a renamed
   table, a permissive `select` policy next to a scoped `update` policy (fires `public_read`
@@ -334,13 +348,9 @@ never emitted, per AGENTS.md §4.
    This one keeps RFC-0001 `accepted` and replaces two of its sections. Should the process
    gain an explicit way to amend part of an RFC, or should this be written as a superseding
    RFC that restates the architecture?
-2. **SQL parsing.** Should the migration replay be a hand-written statement matcher over a
-   deliberately narrow grammar (six statement forms, and anything else is
-   `could_not_assess`), or should it depend on a SQL parser such as `sqlglot`? The matcher
-   keeps the dependency set empty. The parser handles quoting and comments correctly.
-3. **Scope.** The Lovable scenario (the Vite and Supabase detectors) could be split into its
+2. **Scope.** The Lovable scenario (the Vite and Supabase detectors) could be split into its
    own RFC, which would leave this one as the finding model, the audit surface and the
    reordering. Reviewers should decide whether this RFC changes more than one thing.
-4. **Credential double record.** Is emitting both a gap and a linked finding for a committed
+3. **Credential double record.** Is emitting both a gap and a linked finding for a committed
    credential right? The alternative is for the report to present that gap as if it were a
    finding, which would blur the line this RFC draws.
