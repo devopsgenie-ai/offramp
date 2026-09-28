@@ -232,3 +232,52 @@ def test_verify_without_a_manifest_fails(tmp_path):
     result = _run(VERIFY, OWNERS, "--out", tmp_path / "empty")
     assert result.returncode == 1
     assert "manifest" in result.stdout
+
+
+# -- versions in repositories that mix version widths (found by the corpus run) ----------
+
+OPEN = ("create table public.notes (id uuid primary key, "
+        "user_id uuid default auth.uid() references auth.users(id), body text);")
+
+
+def _mixed(tmp_path: Path, names: dict[str, str]) -> Path:
+    root = tmp_path / "app"
+    (root / "src").mkdir(parents=True)
+    (root / "package.json").write_text('{"dependencies": {"@supabase/supabase-js": "2"}}')
+    (root / "src/client.ts").write_text("import { createClient } from '@supabase/supabase-js';\n")
+    (root / "supabase/migrations").mkdir(parents=True)
+    for name, text in names.items():
+        (root / "supabase/migrations" / name).write_text(text)
+    return root
+
+
+def test_the_default_version_sorts_last_by_name_when_widths_are_mixed(tmp_path):
+    """`20260127_b.sql` runs after `20260118172347_a.sql`: files run in name order. The
+    default is the smallest version, as wide as the latest, that sorts after both."""
+    root = _mixed(tmp_path, {"20260118172347_a.sql": OPEN, "20260127_b.sql": "select 1;"})
+    built = fix.build(root)
+    assert built.rendering.migration == "supabase/migrations/20260128000000_offramp_rls.sql"
+
+
+def test_no_version_can_sort_last_is_refused_with_a_way_out(tmp_path):
+    root = _mixed(tmp_path, {"20260101000000_a.sql": OPEN, "99999_b.sql": "select 1;"})
+    with pytest.raises(fix.FixError) as refused:
+        fix.build(root)
+    assert refused.value.code == 2
+    assert "99999_b.sql" in str(refused.value)
+
+
+def test_the_version_does_not_matter_when_nothing_will_be_written(tmp_path):
+    root = _mixed(tmp_path, {"20260101000000_a.sql": "select 1;", "99999_b.sql": "select 1;"})
+    assert fix.build(root).files == {}
+
+
+def test_a_renderer_that_removes_a_read_is_refused():
+    """The fix preserves every behaviour its finding did not name, reads above all: a
+    table nobody can read is the locked-shut failure, and no audit finding reports it."""
+    renderer = _broken(lambda sql: sql + (
+        'drop policy if exists "Owners can view their tasks" on public.tasks;\n'))
+    with pytest.raises(fix.FixError) as refused:
+        fix.build(LOVABLE, renderer=renderer)
+    assert 'the read granted by "Owners can view their tasks" on public.tasks is gone' \
+        in str(refused.value)

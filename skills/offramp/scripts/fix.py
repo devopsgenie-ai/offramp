@@ -67,26 +67,78 @@ def _sha(text: str | bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def _sorts_last(version: str, latest: str | None, existing: list[str]) -> bool:
+    name = f"{version}{MIGRATION_SUFFIX}"
+    return ((latest is None or int(version) > int(latest))
+            and all(name > other for other in existing))
+
+
+def default_version(latest: str | None, existing: list[str]) -> str | None:
+    """`latest + 1`, as RFC-0003 says, when that also sorts last by file name. Migrations
+    run in file-name order -- the replay's and Supabase's tooling's -- and a repository
+    that mixes version widths (`20260127_x.sql` after `20260118172347_y.sql`) breaks the
+    equivalence. Then: the smallest version as wide as the latest that sorts after the
+    last file. None when no such version exists."""
+    if latest is None:
+        return None
+    width = len(latest)
+    candidates = [next_version(latest)]
+    last = max(existing, default="")
+    digits = last[:len(last) - len(last.lstrip("0123456789"))]
+    if digits:
+        if len(digits) < width:
+            candidates.append(str(int(digits) + 1) + "0" * (width - len(digits)))
+        else:
+            candidates += [digits[:width], str(int(digits[:width]) + 1)]
+    valid = [c for c in candidates if len(c) == width and _sorts_last(c, latest, existing)]
+    return min(valid, key=int) if valid else None
+
+
 def resolve_version(latest: str | None, requested: str | None,
                     existing: list[str]) -> str | None:
-    """The migration version: --version, or latest + 1. Either way it must sort after
+    """The migration version: --version, or the default. Either way it must sort after
     every migration in the repository, by number and by file name, because both the
     replay and Supabase's tooling run migrations in that order."""
-    version = requested if requested is not None else next_version(latest)
-    if version is None:
-        return None
-    if not version.isdigit():
+    if requested is None:
+        version = default_version(latest, existing)
+        if version is None and latest is not None:
+            raise FixError(2, f"no migration version sorts after both the latest version "
+                              f"({latest}) and the last file by name "
+                              f"({max(existing)}): the repository mixes version widths. "
+                              f"Pass --version, or rename the odd migration")
+        return version
+    if not requested.isdigit():
         raise FixError(2, f"--version must be digits, like a migration's leading version; "
-                          f"got {version!r}")
-    name = f"{version}{MIGRATION_SUFFIX}"
-    last = max(existing, default=None)
-    if latest is not None and (int(version) <= int(latest) or (last and name <= last)):
-        raise FixError(2, f"--version {version} must sort after the repository's latest "
-                          f"migration ({latest}), or it would run before migrations it fixes")
-    return version
+                          f"got {requested!r}")
+    if not _sorts_last(requested, latest, existing):
+        raise FixError(2, f"--version {requested} must sort after the repository's latest "
+                          f"migration ({latest}), by number and by file name, or it would "
+                          f"run before migrations it fixes")
+    return requested
 
 
-def round_trip(root: Path, rendering: Rendering, document: dict) -> list[str]:
+def _reads(policy) -> bool:
+    return policy.permissive and policy.command in ("select", "all") and policy.using is not None
+
+
+def lost_reads(before, after) -> list[str]:
+    """Reads a policy granted before that no policy grants after. No audit finding
+    reports a table nobody can read, so the round trip checks it directly: a fix that
+    closes a write must never close a read (RFC-0003: preserve every other behaviour)."""
+    later = {table.name: table for table in after.tables or []}
+    problems = []
+    for table in before.tables or []:
+        remaining = [p for p in later.get(table.name, table).policies if _reads(p)]
+        for policy in (p for p in table.policies if _reads(p)):
+            if not any(p.using == policy.using and ("public" in p.roles
+                                                    or set(policy.roles) <= set(p.roles))
+                       for p in remaining):
+                problems.append(f'the read granted by "{policy.name}" on {table.name} is gone')
+    return problems
+
+
+def round_trip(root: Path, rendering: Rendering, document: dict,
+               before_schema=None) -> list[str]:
     """Replay the migrations plus the rendered file, run the RLS checks, and compare."""
     if rendering.migration is None:
         return []
@@ -114,6 +166,8 @@ def round_trip(root: Path, rendering: Rendering, document: dict) -> list[str]:
         problems.append(f"{new} is new and was not predicted")
     for missing in sorted(expected - (after - before)):
         problems.append(f"{missing} was predicted but did not appear")
+    if before_schema is not None:
+        problems += lost_reads(before_schema, schema)
     return problems
 
 
@@ -123,9 +177,16 @@ def build(root: Path, version: str | None = None, renderer=None) -> Built:
     document = audit_repo(root)
     schema = scan.schema
     existing = [path.rsplit("/", 1)[-1] for path in (schema.migrations if schema else [])]
-    resolved = resolve_version(schema.latest if schema else None, version, existing)
+    try:
+        resolved, unusable = resolve_version(schema.latest if schema else None, version,
+                                             existing), None
+    except FixError as error:
+        # A version only matters if a migration is written; say so only then.
+        resolved, unusable = None, error
     rendering = (renderer or render_fix)(scan.appspec, document, resolved)
-    problems = round_trip(root, rendering, document)
+    if unusable is not None and rendering.migration is not None:
+        raise unusable
+    problems = round_trip(root, rendering, document, before_schema=schema)
     if problems:
         raise FixError(2, "the rendered migration does not do what it claims:\n  - "
                           + "\n  - ".join(problems))
