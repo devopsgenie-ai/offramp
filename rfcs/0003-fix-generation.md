@@ -1,7 +1,7 @@
 ---
 rfc: 0003
 title: "Fix generation: a migration renderer for row-level-security findings"
-status: draft
+status: accepted
 authors: [devyansh-dg]
 created: 2026-09-27
 updated: 2026-09-27
