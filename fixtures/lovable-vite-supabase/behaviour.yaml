@@ -1,0 +1,75 @@
+# What users can do before and after the generated fix, on a real PostgreSQL (RFC-0003,
+# Testing). Run by scripts/check_fix_behaviour.py in CI, never by `fix`.
+users:
+  alice: 00000000-0000-4000-8000-00000000000a
+  bob: 00000000-0000-4000-8000-00000000000b
+values:
+  task: 10000000-0000-4000-8000-000000000001
+  note: 20000000-0000-4000-8000-000000000001
+seed: |
+  insert into public.profiles (id, display_name) values ('{alice}', 'Alice'), ('{bob}', 'Bob');
+  insert into public.tasks (id, owner_id, title) values ('{task}', '{alice}', 'Alice''s task');
+  insert into public.notes (id, body) values ('{note}', 'a note');
+checks:
+  # The exposure: with no WHERE clause, SELECT policies do not filter an UPDATE, so the
+  # `true` policy let any signed-in user rewrite every task.
+  - name: another user can no longer rewrite every task
+    as: bob
+    sql: update public.tasks set done = true
+    before: 1
+    after: 0
+  - name: the owner can still update their task
+    as: alice
+    sql: update public.tasks set done = true where id = '{task}'
+    before: 1
+    after: 1
+  - name: the owner can still update without a filter
+    as: alice
+    sql: update public.tasks set title = 'renamed'
+    before: 1
+    after: 1
+  # Refused before as well: an UPDATE that reads columns must leave a row its author can
+  # still SELECT, and the owner-only SELECT policy hides a task given away. After the fix
+  # the owner policy's WITH CHECK refuses it on its own.
+  - name: the owner cannot hand their task to someone else
+    as: alice
+    sql: update public.tasks set owner_id = '{bob}' where id = '{task}'
+    before: error
+    after: error
+  - name: anon still cannot update tasks
+    as: anon
+    sql: update public.tasks set done = true
+    before: 0
+    after: 0
+  - name: reads of tasks are unchanged for the owner
+    as: alice
+    sql: select count(*) from public.tasks
+    before: 1
+    after: 1
+  - name: reads of tasks are unchanged for others
+    as: bob
+    sql: select count(*) from public.tasks
+    before: 0
+    after: 0
+  # The fix closes only what the finding names: tasks never had an INSERT policy.
+  - name: inserting a task is refused before and after
+    as: alice
+    sql: insert into public.tasks (owner_id, title) values ('{alice}', 'new')
+    before: error
+    after: error
+  # NOT FIXED: no owner is proven for notes, so it behaves exactly as before.
+  - name: notes are still readable by anyone
+    as: anon
+    sql: select count(*) from public.notes
+    before: 1
+    after: 1
+  - name: notes are still deletable by anyone (the gap stays open)
+    as: anon
+    sql: delete from public.notes
+    before: 1
+    after: 1
+  - name: public profiles are still public
+    as: anon
+    sql: select count(*) from public.profiles
+    before: 2
+    after: 2

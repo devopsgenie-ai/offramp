@@ -1,0 +1,46 @@
+name: fix-behaviour
+
+# RFC-0003, Testing: apply each fixture's migrations and then its generated fix to a
+# disposable PostgreSQL, and check what users can do before and after. The only test
+# that catches an owner locked out of their own rows. Kept apart from the `test` job:
+# it needs a database service, and `make check` must run without one.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  behaviour:
+    name: Generated fixes on PostgreSQL ${{ matrix.postgres }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The major versions Supabase runs projects on.
+        postgres: ["15", "17"]
+    services:
+      postgres:
+        image: postgres:${{ matrix.postgres }}
+        env:
+          # A throwaway container reachable only from this job: no password to leak.
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install pytest pyyaml
+      # The job checks the checked-in goldens, so first prove they are what fix writes.
+      - run: python -m pytest -q tests/test_fix_cli.py -k golden
+      - run: python scripts/check_fix_behaviour.py
