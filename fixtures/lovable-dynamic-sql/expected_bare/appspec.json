@@ -1,0 +1,68 @@
+{
+  "datastores": [
+    {
+      "consumed_by": [
+        "web"
+      ],
+      "env_keys": [],
+      "kind": "postgres",
+      "mode": null,
+      "name": "supabase",
+      "version": null
+    }
+  ],
+  "delivery": {
+    "gitops_repo_url": null,
+    "image_registry": null,
+    "image_tag": null,
+    "ingress_class": null,
+    "target_cluster": "in-cluster"
+  },
+  "environments": [
+    {
+      "name": "production",
+      "namespace": null,
+      "replicas": null,
+      "resources": null
+    }
+  ],
+  "name": "booking-desk",
+  "routes": [],
+  "services": [
+    {
+      "build": {
+        "build_cmd": "npm run build",
+        "context": ".",
+        "dockerfile": null,
+        "install_cmd": "npm ci",
+        "output_dir": "dist",
+        "start_cmd": null
+      },
+      "env": [],
+      "name": "web",
+      "ports": [],
+      "probes": [],
+      "replicas": 1,
+      "resources": {
+        "limits": {
+          "cpu": "500m",
+          "memory": "512Mi"
+        },
+        "requests": {
+          "cpu": "100m",
+          "memory": "256Mi"
+        }
+      },
+      "role": "web",
+      "runtime": {
+        "language": "node",
+        "version": null
+      }
+    }
+  ],
+  "source": {
+    "commit": null,
+    "platform": "lovable",
+    "repo_url": "https://github.com/example-org/booking-desk.git"
+  }
+}

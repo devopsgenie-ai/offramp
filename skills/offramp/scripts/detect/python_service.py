@@ -132,7 +132,9 @@ def _entrypoint(directory: Path) -> tuple[str | None, str | None]:
 def detect_python_service(
     root: Path, directory: Path
 ) -> tuple[Service, list[Gap], list[Evidence]]:
-    name = dns_label(directory.name)
+    # A service at the repository root has no directory of its own to be named after,
+    # and the checkout directory is not stable (RFC-0001) -- so it is named by its role.
+    name = dns_label(directory.name) if directory != root else "api"
     context = rel(root, directory)
     gaps: list[Gap] = []
     evidence: list[Evidence] = []

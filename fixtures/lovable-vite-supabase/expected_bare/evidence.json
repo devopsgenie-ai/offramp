@@ -1,0 +1,8 @@
+[
+  ".gitconfig:1",
+  "package-lock.json:1",
+  "package.json:1",
+  "src/integrations/supabase/client.ts:2",
+  "src/lib/ai.ts:2",
+  "supabase/config.toml:1"
+]

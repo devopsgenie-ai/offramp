@@ -19,6 +19,21 @@
       "check": "service.no_health_endpoint",
       "reason": null,
       "status": "clean"
+    },
+    {
+      "check": "supabase.rls.disabled",
+      "reason": "the application does not use Supabase",
+      "status": "not_applicable"
+    },
+    {
+      "check": "supabase.rls.permissive_write",
+      "reason": "the application does not use Supabase",
+      "status": "not_applicable"
+    },
+    {
+      "check": "supabase.rls.public_read",
+      "reason": "the application does not use Supabase",
+      "status": "not_applicable"
     }
   ],
   "findings": [
@@ -86,7 +101,7 @@
       "clean": 2,
       "could_not_assess": 0,
       "found": 1,
-      "not_applicable": 0
+      "not_applicable": 3
     },
     "findings": {
       "critical": 2,

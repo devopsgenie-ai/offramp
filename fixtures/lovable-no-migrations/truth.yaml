@@ -1,0 +1,28 @@
+# Uses Supabase, but no supabase/migrations/: the tables were made in the dashboard.
+# Every RLS check must say "could not assess" -- a clean result here would be a lie.
+app:
+  name: recipe-notes
+  platform: lovable
+services:
+  - name: web
+    role: web
+    language: node
+    install_cmd: npm ci
+    dockerfile: null
+    routes: []
+    env: []
+    probes: []
+datastores:
+  - name: supabase
+    kind: postgres
+    consumed_by: [web]
+    env_keys: []
+committed_credentials: []
+findings: []
+assessments:
+  credential.committed: clean
+  frontend.secret_in_bundle: clean
+  service.no_health_endpoint: not_applicable
+  supabase.rls.disabled: could_not_assess
+  supabase.rls.permissive_write: could_not_assess
+  supabase.rls.public_read: could_not_assess

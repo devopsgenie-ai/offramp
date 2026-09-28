@@ -1,0 +1,50 @@
+# Ground truth for the modal Lovable shape, written by hand (RFC-0002, Testing): a Vite
+# SPA at the repository root, reaching a hosted Supabase project, with no backend.
+app:
+  name: task-board
+  platform: lovable
+
+services:
+  # At the repository root, so named by its role -- never by the checkout directory.
+  - name: web
+    role: web
+    language: node
+    install_cmd: npm ci
+    dockerfile: null
+    routes: []
+    env:
+      - name: VITE_OPENAI_API_KEY
+        binding: build_arg
+        sensitive: false
+    probes: []
+
+datastores:
+  - name: supabase
+    kind: postgres
+    consumed_by: [web]
+    env_keys: []
+
+# The project id and URL in .env are identifiers, not credentials, and the anon key in
+# client.ts is public by design.
+committed_credentials: []
+
+findings:
+  # Read by browser code; the name says it is a secret.
+  - frontend.secret_in_bundle.web.VITE_OPENAI_API_KEY
+  # Created in the init migration, never given RLS.
+  - supabase.rls.disabled.public.notes
+  # UPDATE for authenticated with USING (true).
+  - supabase.rls.permissive_write.public.tasks.authenticated-users-can-update-tasks
+  # SELECT with no TO clause (so: public) and USING (true).
+  - supabase.rls.public_read.public.profiles.profiles-are-viewable-by-everyone
+  # Deliberately absent: public.orders (RLS enabled two migrations later),
+  # public.tmp_import (dropped), private.audit_log (not in the exposed schema), and the
+  # owner-scoped policies.
+assessments:
+  credential.committed: clean
+  frontend.secret_in_bundle: found
+  service.no_health_endpoint: not_applicable
+  supabase.rls.disabled: found
+  supabase.rls.permissive_write: found
+  supabase.rls.public_read: found
+
