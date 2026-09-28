@@ -42,6 +42,12 @@ def _precondition(check: str, root: Path, scan, result: Replay) -> Assessment | 
     if not _uses_supabase(root, scan):
         return Assessment(check=check, status="not_applicable",
                           reason="the application does not use Supabase")
+    if result.untimestamped:
+        return Assessment(
+            check=check, status="could_not_assess",
+            reason=("migrations are not all in Supabase's <timestamp>_name.sql format, so "
+                    "the order they ran in is unknown: " + result.untimestamped[0]),
+        )
     if not result.files:
         return Assessment(
             check=check, status="could_not_assess",
@@ -130,7 +136,9 @@ def check_rls_permissive_write(root: Path, scan) -> tuple[list[Finding], Assessm
             id=f"{PERMISSIVE_WRITE}.{table}.{dns_label(policy.name)}",
             check=PERMISSIVE_WRITE,
             category="security",
-            severity="high",
+            # An anonymous INSERT with `true` is usually a contact or waitlist form: worth
+            # asking about (spam, oversized rows), not the same risk as rewriting rows.
+            severity="medium" if policy.command == "insert" else "high",
             title=(f"Policy \"{policy.name}\" lets "
                    f"{'anyone' if _anyone(policy) else 'any signed-in user'} "
                    f"{verb} rows in `{table}`"),

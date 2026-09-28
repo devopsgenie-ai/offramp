@@ -19,7 +19,7 @@ import ast
 from pathlib import Path
 
 from spec import Evidence, Gap, Route, gap_id
-from walk import rel, walk_files
+from walk import read_source, rel, walk_files
 
 HTTP_METHODS = ("get", "post", "put", "patch", "delete", "head", "options")
 
@@ -148,7 +148,7 @@ def detect_routes(
     modules: dict[str, _Module] = {}
     for path in walk_files(directory, suffixes=(".py",)):
         dotted = path.relative_to(directory).with_suffix("").as_posix().replace("/", ".")
-        parsed = _parse_module(path.read_text(encoding="utf-8"), dotted, rel(root, path))
+        parsed = _parse_module(read_source(path), dotted, rel(root, path))
         if parsed is not None:
             modules[dotted] = parsed
 

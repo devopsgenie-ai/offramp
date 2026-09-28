@@ -19,7 +19,7 @@ import re
 from pathlib import Path
 
 from spec import Evidence, EnvVar, Gap, gap_id
-from walk import rel, walk_files
+from walk import read_source, rel, walk_files
 
 BUILD_ARG_PREFIXES = ("REACT_APP_", "VITE_", "NEXT_PUBLIC_")
 DEV_ONLY_ENV = ("WDS_", "FAST_REFRESH", "CHOKIDAR_", "BROWSER", "GENERATE_SOURCEMAP")
@@ -34,7 +34,7 @@ _JS_SUFFIXES = (".js", ".jsx", ".ts", ".tsx", ".mjs")
 def parse_env_file(path: Path) -> list[tuple[str, str, int]]:
     """(key, value, 1-based line) for each assignment. Comments and blanks skipped."""
     found: list[tuple[str, str, int]] = []
-    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+    for number, line in enumerate(read_source(path).splitlines(), start=1):
         stripped = line.strip().removeprefix("export ").strip()
         if not stripped or stripped.startswith("#") or "=" not in stripped:
             continue
@@ -95,7 +95,7 @@ def detect_env(
     for path in walk_files(directory):
         relative = rel(root, path)
         if path.suffix == ".py":
-            for key, default, line in _python_reads(path.read_text(encoding="utf-8")):
+            for key, default, line in _python_reads(read_source(path)):
                 if key not in reads or (reads[key][0] is None and default is not None):
                     reads[key] = (default, relative, line)
         elif path.suffix in _JS_SUFFIXES:
