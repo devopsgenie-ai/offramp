@@ -35,6 +35,7 @@ from detect.node_service import detect_node_service, find_node_services  # noqa:
 from detect.probes import detect_probes                           # noqa: E402
 from detect.python_service import detect_python_service, find_python_services  # noqa: E402
 from detect.routes import detect_routes                           # noqa: E402
+from detect.supabase import detect_supabase                       # noqa: E402
 from gaps import answerable_set, is_moot, spec_level_gaps         # noqa: E402
 from report import render_gap_report                              # noqa: E402
 from spec import (                                                # noqa: E402
@@ -90,6 +91,10 @@ def scan_repo(root: Path) -> ScanResult:
     services.sort(key=lambda item: item.name)
 
     datastores, datastore_gaps, datastore_evidence = detect_datastores(root, services)
+    supabase, supabase_gaps, supabase_evidence = detect_supabase(root, services)
+    datastores = sorted(datastores + supabase, key=lambda item: item.name)
+    datastore_gaps += supabase_gaps
+    datastore_evidence += supabase_evidence
     services = tag_datastore_env(services, datastores)
     gaps.extend(datastore_gaps)
     evidence.extend(datastore_evidence)

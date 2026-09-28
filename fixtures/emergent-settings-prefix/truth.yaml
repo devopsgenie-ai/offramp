@@ -16,3 +16,13 @@ datastores: []
 committed_credentials: []
 must_not_detect:
   routes: ["/health", "/api/health"]
+
+# Audit findings, written by hand (RFC-0002, Testing).
+findings: []
+assessments:
+  credential.committed: clean
+  platform.hardcoded_url: clean
+  frontend.secret_in_bundle: not_applicable
+  # The health route exists, but its prefix is read from settings at runtime. "No
+  # health route found" is not "no health route", so this must not be a finding.
+  service.no_health_endpoint: could_not_assess

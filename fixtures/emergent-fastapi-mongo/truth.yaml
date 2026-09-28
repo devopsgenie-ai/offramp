@@ -62,3 +62,16 @@ committed_credentials:
 must_not_detect:
   env_names: [WDS_SOCKET_PORT]
   credential_paths: [frontend/node_modules/leftpad/.env]
+
+# Audit findings, written by hand (RFC-0002, Testing). The ids must match exactly: an
+# extra finding is a false positive, which is the more expensive failure in an audit.
+findings:
+  - credential.committed.backend.env.JWT_SECRET
+  - credential.committed.backend.env.MONGO_URL
+assessments:
+  credential.committed: found
+  # REACT_APP_BACKEND_URL is a build arg, but it is a URL, not a secret.
+  platform.hardcoded_url: clean
+  frontend.secret_in_bundle: clean
+  # /api/health exists once the router prefix is composed.
+  service.no_health_endpoint: clean

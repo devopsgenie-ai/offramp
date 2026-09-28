@@ -12,6 +12,7 @@ credential."
 
 from __future__ import annotations
 
+import codecs
 import re
 from pathlib import Path
 from typing import Iterator
@@ -42,6 +43,21 @@ def walk_files(root: Path, suffixes: tuple[str, ...] | None = None) -> Iterator[
         elif entry.is_file():
             if suffixes is None or entry.suffix in suffixes:
                 yield entry
+
+
+def read_source(path: Path) -> str:
+    """A file's text, whatever it was saved as.
+
+    The recall corpus had a UTF-16 requirements.txt, and one strict UTF-8 read aborted the
+    whole run. A byte-order mark decides the codec; anything else is UTF-8 with undecodable
+    bytes replaced, so one odd file costs one detector a guess, never the run.
+    """
+    data = path.read_bytes()
+    if data.startswith(codecs.BOM_UTF8):
+        return data[len(codecs.BOM_UTF8):].decode("utf-8", errors="replace")
+    if data.startswith((codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)):
+        return data.decode("utf-16", errors="replace")
+    return data.decode("utf-8", errors="replace")
 
 
 def rel(root: Path, path: Path) -> str:

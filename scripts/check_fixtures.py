@@ -22,6 +22,7 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "skills/offramp/scripts"))
 
+from audit import audit_repo  # noqa: E402
 from scan import scan_repo  # noqa: E402
 from spec import SEVERITY_ORDER  # noqa: E402
 
@@ -47,6 +48,33 @@ def assertion_guard(truth: dict, appspec) -> list[str]:
             )
     if "app" not in truth or "name" not in (truth.get("app") or {}):
         problems.append("truth.yaml does not assert app.name")
+    if "findings" not in truth:
+        problems.append(
+            "truth.yaml does not assert findings. An empty list is an assertion; a missing "
+            "key is not (RFC-0002, Testing)."
+        )
+    return problems
+
+
+def check_findings(truth: dict, directory: Path) -> list[str]:
+    """Audit findings against hand-written truth, exactly. An extra finding is a false
+    positive -- the more expensive failure in an audit, because a report that raises
+    false alarms teaches its reader to ignore it."""
+    if "findings" not in truth:
+        return []
+    document = audit_repo(directory)
+    detected = {item["id"] for item in document["findings"]}
+    expected = set(truth["findings"] or [])
+    problems = [f"finding {item} in truth.yaml, not reported"
+                for item in sorted(expected - detected)]
+    problems += [f"finding {item} reported, absent from truth.yaml (false positive?)"
+                 for item in sorted(detected - expected)]
+    statuses = {item["check"]: item["status"] for item in document["assessments"]}
+    for check, status in sorted((truth.get("assessments") or {}).items()):
+        if statuses.get(check) != status:
+            problems.append(
+                f"assessment {check}: reported {statuses.get(check)!r}, truth {status!r}"
+            )
     return problems
 
 
@@ -147,6 +175,8 @@ def check_fixture(directory: Path) -> list[str]:
     for route in forbidden.get("routes") or []:
         if route in {item.path for item in appspec.routes}:
             problems.append(f"must_not_detect: route {route} was detected")
+
+    problems.extend(check_findings(truth, directory))
 
     recorded_path = directory / "gap_count.json"
     if recorded_path.is_file():

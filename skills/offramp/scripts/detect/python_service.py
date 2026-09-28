@@ -17,7 +17,7 @@ import re
 from pathlib import Path
 
 from spec import Build, Evidence, Gap, Resources, Runtime, Service, gap_id
-from walk import dns_label, rel, walk_files
+from walk import dns_label, read_source, rel, walk_files
 
 PROPOSED_PYTHON = "3.11"
 ENTRY_MODULES = ("server.py", "main.py", "app.py", "asgi.py", "wsgi.py")
@@ -57,7 +57,7 @@ def _declared_version(directory: Path) -> tuple[str | None, str | None]:
     for filename in (".python-version", "runtime.txt"):
         path = directory / filename
         if path.is_file():
-            text = path.read_text(encoding="utf-8").strip()
+            text = read_source(path).strip()
             cleaned = text.removeprefix("python-").strip()
             if cleaned:
                 return cleaned, filename
@@ -65,7 +65,7 @@ def _declared_version(directory: Path) -> tuple[str | None, str | None]:
     if pyproject.is_file():
         match = re.search(
             r'requires-python\s*=\s*"[^0-9]*([0-9]+\.[0-9]+)',
-            pyproject.read_text(encoding="utf-8"),
+            read_source(pyproject),
         )
         if match:
             return match.group(1), "pyproject.toml"
@@ -90,7 +90,7 @@ def _listen_port(directory: Path) -> tuple[int | None, str | None]:
         if not path.is_file():
             continue
         try:
-            tree = ast.parse(path.read_text(encoding="utf-8"))
+            tree = ast.parse(read_source(path))
         except SyntaxError:
             continue
         for node in ast.walk(tree):
@@ -103,7 +103,7 @@ def _listen_port(directory: Path) -> tuple[int | None, str | None]:
                 return value, filename
     dockerfile = directory / "Dockerfile"
     if dockerfile.is_file():
-        match = EXPOSE_RE.search(dockerfile.read_text(encoding="utf-8"))
+        match = EXPOSE_RE.search(read_source(dockerfile))
         if match:
             return int(match.group(1)), "Dockerfile"
     return None, None
@@ -116,7 +116,7 @@ def _entrypoint(directory: Path) -> tuple[str | None, str | None]:
         if not path.is_file():
             continue
         try:
-            tree = ast.parse(path.read_text(encoding="utf-8"))
+            tree = ast.parse(read_source(path))
         except SyntaxError:
             continue
         for node in ast.walk(tree):
@@ -132,14 +132,16 @@ def _entrypoint(directory: Path) -> tuple[str | None, str | None]:
 def detect_python_service(
     root: Path, directory: Path
 ) -> tuple[Service, list[Gap], list[Evidence]]:
-    name = dns_label(directory.name)
+    # A service at the repository root has no directory of its own to be named after,
+    # and the checkout directory is not stable (RFC-0001) -- so it is named by its role.
+    name = dns_label(directory.name) if directory != root else "api"
     context = rel(root, directory)
     gaps: list[Gap] = []
     evidence: list[Evidence] = []
 
     requirements = directory / "requirements.txt"
     requirements_rel = rel(root, requirements)
-    names, unpinned = _requirement_names(requirements.read_text(encoding="utf-8"))
+    names, unpinned = _requirement_names(read_source(requirements))
     evidence.append(Evidence(path=requirements_rel, line=1))
 
     version, version_file = _declared_version(directory)

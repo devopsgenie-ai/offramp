@@ -14,7 +14,7 @@ from pathlib import Path
 
 from detect.python_service import DEFAULT_RESOURCES
 from spec import Build, Evidence, Gap, Runtime, Service, gap_id
-from walk import dns_label, rel, walk_files
+from walk import dns_label, read_source, rel, walk_files
 
 PROPOSED_NODE = "20"
 
@@ -37,7 +37,7 @@ def find_node_services(root: Path) -> list[Path]:
 def _node_version(package: dict, directory: Path) -> tuple["str | None", "str | None"]:
     nvmrc = directory / ".nvmrc"
     if nvmrc.is_file():
-        text = nvmrc.read_text(encoding="utf-8").strip().lstrip("v")
+        text = read_source(nvmrc).strip().lstrip("v")
         if text:
             return text, ".nvmrc"
     declared = package.get("engines", {}).get("node")
@@ -51,11 +51,13 @@ def _node_version(package: dict, directory: Path) -> tuple["str | None", "str | 
 def detect_node_service(
     root: Path, directory: Path
 ) -> tuple[Service, list[Gap], list[Evidence]]:
-    name = dns_label(directory.name)
+    # A service at the repository root has no directory of its own to be named after,
+    # and the checkout directory is not stable (RFC-0001) -- so it is named by its role.
+    name = dns_label(directory.name) if directory != root else "web"
     context = rel(root, directory)
     manifest = directory / "package.json"
     manifest_rel = rel(root, manifest)
-    package = json.loads(manifest.read_text(encoding="utf-8"))
+    package = json.loads(read_source(manifest))
     dependencies = {**package.get("dependencies", {}), **package.get("devDependencies", {})}
     scripts = package.get("scripts", {})
 

@@ -7,10 +7,9 @@ import pytest
 from scan import OUTPUT_NAMES, scan_repo
 from spec import canonical_json, check_enums
 
-FIXTURES = [
-    Path("fixtures/emergent-fastapi-mongo"),
-    Path("fixtures/emergent-settings-prefix"),
-]
+FIXTURES = sorted(
+    path for path in Path("fixtures").iterdir() if (path / "expected_bare").is_dir()
+)
 
 
 @pytest.mark.parametrize("fixture", FIXTURES, ids=lambda p: p.name)
