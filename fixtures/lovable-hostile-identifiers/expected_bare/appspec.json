@@ -1,0 +1,199 @@
+{
+  "datastores": [
+    {
+      "consumed_by": [
+        "web"
+      ],
+      "env_keys": [],
+      "kind": "postgres",
+      "mode": null,
+      "name": "supabase",
+      "schema": {
+        "latest": "20260401090000",
+        "migrations": [
+          "supabase/migrations/20260401090000_odd_names.sql"
+        ],
+        "tables": [
+          {
+            "columns": [
+              {
+                "default": "gen_random_uuid()",
+                "name": "id",
+                "nullable": false,
+                "primary_key": true,
+                "references": null
+              },
+              {
+                "default": "auth.uid()",
+                "name": "Owner ID",
+                "nullable": false,
+                "primary_key": false,
+                "references": "auth.users.id"
+              },
+              {
+                "default": null,
+                "name": "body",
+                "nullable": true,
+                "primary_key": false,
+                "references": null
+              }
+            ],
+            "evidence": "supabase/migrations/20260401090000_odd_names.sql:5",
+            "name": "public.Journal \"Entries\"; DROP TABLE public.profiles; --",
+            "policies": [],
+            "rls": false,
+            "write_scope": {
+              "basis": [
+                "it references auth.users.id"
+              ],
+              "column": "Owner ID",
+              "kind": "owner"
+            }
+          },
+          {
+            "columns": [
+              {
+                "default": "gen_random_uuid()",
+                "name": "id",
+                "nullable": false,
+                "primary_key": true,
+                "references": null
+              },
+              {
+                "default": null,
+                "name": "user_id",
+                "nullable": false,
+                "primary_key": false,
+                "references": "auth.users.id"
+              },
+              {
+                "default": null,
+                "name": "body",
+                "nullable": true,
+                "primary_key": false,
+                "references": null
+              }
+            ],
+            "evidence": "supabase/migrations/20260401090000_odd_names.sql:20",
+            "name": "public.notes\nalter table public.profiles disable row level security; --",
+            "policies": [
+              {
+                "command": "update",
+                "evidence": "supabase/migrations/20260401090000_odd_names.sql:28",
+                "name": "Anyone can edit\"; DROP TABLE public.profiles; /* */ --",
+                "permissive": true,
+                "renamed_since": [],
+                "roles": [
+                  "authenticated"
+                ],
+                "using": "true",
+                "with_check": null
+              }
+            ],
+            "rls": true,
+            "write_scope": {
+              "basis": [
+                "it references auth.users.id"
+              ],
+              "column": "user_id",
+              "kind": "owner"
+            }
+          },
+          {
+            "columns": [
+              {
+                "default": "gen_random_uuid()",
+                "name": "id",
+                "nullable": false,
+                "primary_key": true,
+                "references": null
+              },
+              {
+                "default": null,
+                "name": "user",
+                "nullable": false,
+                "primary_key": false,
+                "references": "auth.users.id"
+              },
+              {
+                "default": null,
+                "name": "total_cents",
+                "nullable": false,
+                "primary_key": false,
+                "references": null
+              }
+            ],
+            "evidence": "supabase/migrations/20260401090000_odd_names.sql:12",
+            "name": "public.order",
+            "policies": [],
+            "rls": false,
+            "write_scope": {
+              "basis": [
+                "it references auth.users.id"
+              ],
+              "column": "user",
+              "kind": "owner"
+            }
+          }
+        ],
+        "unordered": [],
+        "unreplayable": []
+      },
+      "version": null
+    }
+  ],
+  "delivery": {
+    "gitops_repo_url": null,
+    "image_registry": null,
+    "image_tag": null,
+    "ingress_class": null,
+    "target_cluster": "in-cluster"
+  },
+  "environments": [
+    {
+      "name": "production",
+      "namespace": null,
+      "replicas": null,
+      "resources": null
+    }
+  ],
+  "name": "odd-names",
+  "routes": [],
+  "services": [
+    {
+      "build": {
+        "build_cmd": "npm run build",
+        "context": ".",
+        "dockerfile": null,
+        "install_cmd": "npm ci",
+        "output_dir": "dist",
+        "start_cmd": null
+      },
+      "env": [],
+      "name": "web",
+      "ports": [],
+      "probes": [],
+      "replicas": 1,
+      "resources": {
+        "limits": {
+          "cpu": "500m",
+          "memory": "512Mi"
+        },
+        "requests": {
+          "cpu": "100m",
+          "memory": "256Mi"
+        }
+      },
+      "role": "web",
+      "runtime": {
+        "language": "node",
+        "version": null
+      }
+    }
+  ],
+  "source": {
+    "commit": null,
+    "platform": "lovable",
+    "repo_url": "https://github.com/example-org/odd-names.git"
+  }
+}
