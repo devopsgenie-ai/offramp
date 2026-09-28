@@ -16,6 +16,11 @@
       "status": "clean"
     },
     {
+      "check": "platform.hardcoded_url",
+      "reason": null,
+      "status": "clean"
+    },
+    {
       "check": "service.no_health_endpoint",
       "reason": null,
       "status": "clean"
@@ -98,7 +103,7 @@
   "schema": "offramp.audit/1",
   "summary": {
     "checks": {
-      "clean": 2,
+      "clean": 3,
       "could_not_assess": 0,
       "found": 1,
       "not_applicable": 3

@@ -71,6 +71,7 @@ findings:
 assessments:
   credential.committed: found
   # REACT_APP_BACKEND_URL is a build arg, but it is a URL, not a secret.
+  platform.hardcoded_url: clean
   frontend.secret_in_bundle: clean
   # /api/health exists once the router prefix is composed.
   service.no_health_endpoint: clean

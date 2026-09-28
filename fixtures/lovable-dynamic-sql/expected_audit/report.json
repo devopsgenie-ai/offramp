@@ -16,6 +16,11 @@
       "status": "clean"
     },
     {
+      "check": "platform.hardcoded_url",
+      "reason": null,
+      "status": "clean"
+    },
+    {
       "check": "service.no_health_endpoint",
       "reason": "no backend service in the repository",
       "status": "not_applicable"
@@ -77,7 +82,7 @@
   "schema": "offramp.audit/1",
   "summary": {
     "checks": {
-      "clean": 2,
+      "clean": 3,
       "could_not_assess": 3,
       "found": 0,
       "not_applicable": 1

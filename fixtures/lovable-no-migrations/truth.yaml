@@ -21,6 +21,7 @@ committed_credentials: []
 findings: []
 assessments:
   credential.committed: clean
+  platform.hardcoded_url: clean
   frontend.secret_in_bundle: clean
   service.no_health_endpoint: not_applicable
   supabase.rls.disabled: could_not_assess
