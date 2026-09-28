@@ -55,6 +55,7 @@
       ],
       "remedy": "Rotate the credential at its source, then supply the new value through the environment rather than a committed file. Treat the old value as disclosed.",
       "severity": "critical",
+      "subject": {},
       "title": "`JWT_SECRET` is committed to the repository"
     },
     {
@@ -70,6 +71,7 @@
       ],
       "remedy": "Rotate the credential at its source, then supply the new value through the environment rather than a committed file. Treat the old value as disclosed.",
       "severity": "critical",
+      "subject": {},
       "title": "`MONGO_URL` is committed to the repository"
     }
   ],

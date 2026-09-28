@@ -17,6 +17,23 @@
   {
     "confidence": "low",
     "depends_on": [],
+    "evidence": [
+      "supabase/migrations/20260110093000_init.sql:45"
+    ],
+    "evidence_scope": [],
+    "id": "datastore.supabase.table.public.notes.write_scope",
+    "kind": "value",
+    "origin": "detector",
+    "pointers": [
+      "/datastores/0/schema/tables/1/write_scope"
+    ],
+    "proposed": null,
+    "question": "Who may change rows in `public.notes`? No column is proven to identify a row's owner. No policy can be written without guessing. Answer with the owner column, or `server_only` if only your server should write.",
+    "severity": "blocking"
+  },
+  {
+    "confidence": "low",
+    "depends_on": [],
     "evidence": [],
     "evidence_scope": [],
     "id": "delivery.gitops_repo_url",

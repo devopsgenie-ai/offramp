@@ -5,6 +5,14 @@
     "pointers": [],
     "severity": "blocking"
   },
+  "datastore.supabase.table.public.notes.write_scope": {
+    "evidence_scope": [],
+    "kind": "value",
+    "pointers": [
+      "/datastores/0/schema/tables/1/write_scope"
+    ],
+    "severity": "blocking"
+  },
   "delivery.gitops_repo_url": {
     "evidence_scope": [],
     "kind": "value",

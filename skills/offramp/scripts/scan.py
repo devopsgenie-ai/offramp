@@ -33,6 +33,7 @@ from detect.env import detect_env                                 # noqa: E402
 from detect.identity import detect_identity, detect_platform      # noqa: E402
 from detect.migrations import detect_schema                        # noqa: E402
 from detect.node_service import detect_node_service, find_node_services  # noqa: E402
+from detect.owners import detect_write_scopes                     # noqa: E402
 from detect.probes import detect_probes                           # noqa: E402
 from detect.python_service import detect_python_service, find_python_services  # noqa: E402
 from detect.routes import detect_routes                           # noqa: E402
@@ -98,11 +99,14 @@ def scan_repo(root: Path) -> ScanResult:
     datastores, datastore_gaps, datastore_evidence = detect_datastores(root, services)
     supabase, supabase_gaps, supabase_evidence = detect_supabase(root, services)
     schema = detect_schema(root)
-    datastores = sorted(
-        (replace(store, schema=schema) if store.name == "supabase" else store
-         for store in datastores + supabase),
-        key=lambda item: item.name,
-    )
+    datastores = sorted(datastores + supabase, key=lambda item: item.name)
+    for index, store in enumerate(datastores):
+        if store.name == "supabase":
+            # Owners are detected only where the schema joins the AppSpec: a gap has to
+            # point at the field an answer would fill.
+            schema, owner_gaps = detect_write_scopes(schema, f"/datastores/{index}/schema")
+            datastores[index] = replace(store, schema=schema)
+            datastore_gaps += owner_gaps
     datastore_gaps += supabase_gaps
     datastore_evidence += supabase_evidence
     services = tag_datastore_env(services, datastores)

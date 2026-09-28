@@ -28,6 +28,17 @@ datastores:
 # client.ts is public by design.
 committed_credentials: []
 
+# RFC-0003: who owns each row, by evidence only. `undetermined` is an assertion too.
+write_scope:
+  # "Owners can view their tasks" compares owner_id to auth.uid(). No foreign key.
+  public.tasks: owner_id
+  # The primary key references auth.users, and a policy compares it to auth.uid().
+  public.profiles: id
+  # "Customers see their orders" compares customer_id to auth.uid().
+  public.orders: customer_id
+  # (id, body): nothing says whose note it is. RLS is off, so this is a blocking gap.
+  public.notes: undetermined
+
 findings:
   # index.html loads gptengineer.js from Lovable's CDN.
   - platform.hardcoded_url.lovable-editor-script

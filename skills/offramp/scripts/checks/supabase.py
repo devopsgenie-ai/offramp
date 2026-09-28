@@ -23,17 +23,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from spec import Policy, Schema
 from findings import Assessment, Finding
+from rls import anyone, is_permissive_write, is_public_read, public_tables, rls_never_enabled
+from spec import Policy, Schema
 from walk import dns_label
 
 DISABLED = "supabase.rls.disabled"
 PERMISSIVE_WRITE = "supabase.rls.permissive_write"
 PUBLIC_READ = "supabase.rls.public_read"
-
-_WRITE_COMMANDS = ("all", "insert", "update", "delete")
-_ANYONE = ("anon", "public")
-_SIGNED_IN = ("authenticated",)
 
 
 def _uses_supabase(root: Path, scan) -> bool:
@@ -68,14 +65,6 @@ def _precondition(check: str, root: Path, scan) -> Assessment | None:
     return None
 
 
-def _public_tables(schema: Schema):
-    return [table for table in schema.tables if table.name.startswith("public.")]
-
-
-def _anyone(policy: Policy) -> bool:
-    return any(role in _ANYONE for role in policy.roles)
-
-
 def check_rls_disabled(root: Path, scan) -> tuple[list[Finding], Assessment]:
     if (early := _precondition(DISABLED, root, scan)) is not None:
         return [], early
@@ -85,8 +74,8 @@ def check_rls_disabled(root: Path, scan) -> tuple[list[Finding], Assessment]:
 
 def rls_disabled_findings(schema: Schema) -> list[Finding]:
     findings = []
-    for table in _public_tables(schema):
-        if table.rls is not False or table.evidence is None:
+    for table in public_tables(schema):
+        if not rls_never_enabled(table):
             continue
         findings.append(Finding(
             id=f"{DISABLED}.{table.name}",
@@ -105,17 +94,18 @@ def rls_disabled_findings(schema: Schema) -> list[Finding]:
                 "row's owner. Until then, treat the data in it as exposed."
             ),
             evidence=[table.evidence],
+            subject={"table": table.name},
         ))
     return findings
 
 
 def _policy_findings(schema: Schema, predicate, build) -> list[Finding]:
     findings = []
-    for table in _public_tables(schema):
+    for table in public_tables(schema):
         if table.rls is False:
             continue  # policies do not apply; rls.disabled reports the table instead
         for policy in table.policies:
-            if policy.permissive and predicate(policy):
+            if predicate(policy):
                 findings.append(build(table.name, policy))
     return findings
 
@@ -125,18 +115,6 @@ def _policy_check(check: str, root: Path, scan, findings_of) -> tuple[list[Findi
         return [], early
     findings = findings_of(scan.schema)
     return findings, Assessment(check=check, status="found" if findings else "clean")
-
-
-def _is_permissive_write(policy: Policy) -> bool:
-    return (policy.command in _WRITE_COMMANDS
-            and any(role in _ANYONE + _SIGNED_IN for role in policy.roles)
-            and "true" in (policy.using, policy.with_check))
-
-
-def _is_public_read(policy: Policy) -> bool:
-    return (policy.command == "select"
-            and any(role in _ANYONE for role in policy.roles)
-            and policy.using == "true")
 
 
 def check_rls_permissive_write(root: Path, scan) -> tuple[list[Finding], Assessment]:
@@ -155,11 +133,11 @@ def permissive_write_findings(schema: Schema) -> list[Finding]:
             # asking about (spam, oversized rows), not the same risk as rewriting rows.
             severity="medium" if policy.command == "insert" else "high",
             title=(f"Policy \"{policy.name}\" lets "
-                   f"{'anyone' if _anyone(policy) else 'any signed-in user'} "
+                   f"{'anyone' if anyone(policy) else 'any signed-in user'} "
                    f"{verb} rows in `{table}`"),
             detail=(
                 f"The policy \"{policy.name}\" on `{table}` allows {command} for "
-                + ("anyone, without signing in. " if _anyone(policy) else
+                + ("anyone, without signing in. " if anyone(policy) else
                    "any signed-in user. If sign-up is open, that is anyone. ")
                 + "Its condition is simply `true`, so it never checks whose row it is."
             ),
@@ -168,8 +146,9 @@ def permissive_write_findings(schema: Schema) -> list[Finding]:
                 "`auth.uid() = user_id`, or remove the policy if nobody should do this."
             ),
             evidence=[policy.evidence],
+            subject={"table": table, "policy": policy.name},
         )
-    return _policy_findings(schema, _is_permissive_write, build)
+    return _policy_findings(schema, is_permissive_write, build)
 
 
 def check_rls_public_read(root: Path, scan) -> tuple[list[Finding], Assessment]:
@@ -194,5 +173,6 @@ def public_read_findings(schema: Schema) -> list[Finding]:
                 "policy, or move the private columns to a table with its own policies."
             ),
             evidence=[policy.evidence],
+            subject={"table": table, "policy": policy.name},
         )
-    return _policy_findings(schema, _is_public_read, build)
+    return _policy_findings(schema, is_public_read, build)

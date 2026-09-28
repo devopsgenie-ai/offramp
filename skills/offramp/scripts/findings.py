@@ -34,6 +34,11 @@ class Finding:
     remedy: str            # generic; names no vendor, product or service
     evidence: list[str]    # path:line, never a value
     related_gaps: list[str] = field(default_factory=list)
+    #: What the finding is about, by name: {"table": "public.tasks", "policy": "..."}.
+    #: RFC-0003 added it so a renderer can join a finding to its table and policy
+    #: without parsing an id, which dns_label makes lossy. Empty where no renderer
+    #: needs it yet.
+    subject: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass

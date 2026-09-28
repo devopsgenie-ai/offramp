@@ -23,6 +23,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "skills/offramp/scripts"))
 
 from audit import audit_repo  # noqa: E402
+from rls import leaves_writes_open, public_tables  # noqa: E402
 from scan import scan_repo  # noqa: E402
 from spec import SEVERITY_ORDER  # noqa: E402
 
@@ -53,6 +54,49 @@ def assertion_guard(truth: dict, appspec) -> list[str]:
             "truth.yaml does not assert findings. An empty list is an assertion; a missing "
             "key is not (RFC-0002, Testing)."
         )
+    owner_tables = [table.name for table in _owner_tables(appspec)]
+    if owner_tables and "write_scope" not in truth:
+        problems.append(
+            "truth.yaml does not assert write_scope, and the replay found tables that "
+            "have or need an owner (RFC-0003, Testing)."
+        )
+    asserted_scopes = truth.get("write_scope") or {}
+    for name in owner_tables:
+        if "write_scope" in truth and name not in asserted_scopes:
+            problems.append(
+                f"truth.yaml asserts nothing about the owner of `{name}`, which has a "
+                f"detected owner or needs one. An unasserted owner is an untested guess."
+            )
+    return problems
+
+
+def _owner_tables(appspec):
+    """Public tables whose owner matters: detected, or needed by the fix."""
+    for store in appspec.datastores:
+        if store.schema is None or store.schema.tables is None:
+            continue
+        for table in public_tables(store.schema):
+            if table.write_scope is not None or leaves_writes_open(table):
+                yield table
+
+
+def check_write_scopes(truth: dict, appspec) -> list[str]:
+    """Owners against hand-written truth, exactly: the column, `server_only`, or
+    `undetermined`. RFC-0003: 100% agreement, because for this field a guess is a
+    lockout rather than a noisy report."""
+    tables = {table.name: table for store in appspec.datastores if store.schema
+              for table in store.schema.tables or []}
+    problems = []
+    for name, expected in sorted((truth.get("write_scope") or {}).items()):
+        table = tables.get(name)
+        if table is None:
+            problems.append(f"write_scope {name}: in truth.yaml, table not replayed")
+            continue
+        scope = table.write_scope
+        actual = ("undetermined" if scope is None
+                  else scope.column if scope.kind == "owner" else scope.kind)
+        if actual != expected:
+            problems.append(f"write_scope {name}: detected {actual!r}, truth {expected!r}")
     return problems
 
 
@@ -176,6 +220,7 @@ def check_fixture(directory: Path) -> list[str]:
         if route in {item.path for item in appspec.routes}:
             problems.append(f"must_not_detect: route {route} was detected")
 
+    problems.extend(check_write_scopes(truth, appspec))
     problems.extend(check_findings(truth, directory))
 
     recorded_path = directory / "gap_count.json"
