@@ -72,6 +72,12 @@ write configuration for you to review, and your own pipeline applies it.
 
 It also names no vendor in its reports, including the people who maintain it.
 
+## Getting help
+
+The report tells you what to fix and how. If you would rather have someone do it, the
+maintainers at [DevOps Genie](https://devopsgenie.ai/contact) offer fixed-price help.
+The tool itself will never recommend them, or anyone else.
+
 ## Contributing
 
 Read [AGENTS.md](AGENTS.md) first. It applies to humans and coding agents alike. Design
