@@ -103,6 +103,59 @@ class Service:
 
 
 @dataclass
+class Column:
+    """RFC-0003. `default` and `primary_key` go beyond the RFC's sketch: the fix has to
+    say whether the app must set the owner on insert, and the one-hop owner rule needs
+    to know which column is a table's key."""
+
+    name: str
+    nullable: bool
+    references: str | None     # "auth.users.id", "public.profiles.id"
+    default: str | None        # normalised expression, e.g. "auth.uid()"
+    primary_key: bool
+
+
+@dataclass
+class Policy:
+    name: str
+    command: str               # all | select | insert | update | delete
+    roles: list[str]           # "public" when the policy has no TO clause
+    using: str | None          # normalised expression, e.g. "true"
+    with_check: str | None
+    permissive: bool
+    evidence: str              # path:line of the CREATE POLICY
+    #: Columns renamed after this policy was created, old and new names. PostgreSQL
+    #: rewrites a stored policy on rename; the replay keeps the text as written, so a
+    #: policy with renames since it was written is not evidence of anything by name.
+    renamed_since: list[str] = field(default_factory=list)
+
+
+@dataclass
+class Table:
+    name: str                  # "public.tasks". Identity; never answerable
+    rls: bool | None           # None: altered in these migrations, created elsewhere
+    evidence: str | None       # where it was created; None when created elsewhere
+    #: None when a statement changing columns was not understood, or the table was
+    #: created elsewhere. Tracked apart from `rls`: an unparseable column change must
+    #: not cost the RLS checks their answer.
+    columns: list[Column] | None
+    policies: list[Policy]     # sorted by name
+
+
+@dataclass
+class Schema:
+    """The replay of `supabase/migrations/`, as a detector. RFC-0003: one replay with
+    two consumers, the audit's RLS checks and the fix renderer, so they can never
+    disagree about the schema."""
+
+    migrations: list[str]      # replayed, in run order
+    unreplayable: list[str]    # "path:line: reason". Non-empty means tables is None
+    unordered: list[str]       # no leading version; order unknown, so tables is None
+    latest: str | None         # highest migration version seen
+    tables: list[Table] | None
+
+
+@dataclass
 class Datastore:
     name: str              # identity; kind alone collides
     kind: str
@@ -110,6 +163,8 @@ class Datastore:
     mode: str | None       # in_cluster | managed | external. Never defaulted.
     consumed_by: list[str]
     env_keys: list[str]
+    #: A postgres datastore whose migrations are in the repository. None otherwise.
+    schema: Schema | None = None
 
 
 @dataclass
