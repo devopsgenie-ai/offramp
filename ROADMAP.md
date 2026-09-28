@@ -14,7 +14,7 @@ to us as much as to anyone.
 | Item | RFC | Notes |
 |---|---|---|
 | Core architecture | [0001](rfcs/0001-architecture.md) | Detectors, AppSpec, renderers, gaps. **Accepted.** |
-| **`audit`: read-only readiness report** | [0002](rfcs/0002-audit-first.md) | Findings and assessments over `scan`: Supabase row-level security, secrets in the bundle, committed credentials, platform couplings. Lovable and Emergent. **Proposed; ships first.** |
+| **`audit`: read-only readiness report** | [0002](rfcs/0002-audit-first.md) | Findings and assessments over `scan`: Supabase row-level security, secrets in the bundle, committed credentials, platform couplings. Lovable and Emergent. **Implemented** (#14–#19). |
 | First scenario: Emergent (FastAPI + CRA + Mongo) | — | First because it has a service worth generating, not because it is typical. The modal generated app is a Vite SPA with no backend in the repo. |
 | First target: Kubernetes via Kustomize + GitOps | — | Capability choice, not a demonstrated user need. Moved after `audit` by RFC-0002. |
 | Golden fixture corpus + gap metrics in CI | — | Multi-module fixtures; `truth.yaml`; bare gap count. |
