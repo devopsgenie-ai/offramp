@@ -1,0 +1,44 @@
+{
+  "app": {
+    "commit": null,
+    "name": "task-board",
+    "platform": "lovable"
+  },
+  "expected_after": [],
+  "findings": [
+    {
+      "check": "supabase.rls.disabled",
+      "gap": "datastore.supabase.table.public.notes.write_scope",
+      "id": "supabase.rls.disabled.public.notes",
+      "policy": null,
+      "reason": "No column is proven to identify a row's owner.",
+      "severity": "critical",
+      "status": "gap",
+      "table": "public.notes"
+    },
+    {
+      "check": "supabase.rls.permissive_write",
+      "gap": null,
+      "id": "supabase.rls.permissive_write.public.tasks.authenticated-users-can-update-tasks",
+      "policy": "Authenticated users can update tasks",
+      "reason": "",
+      "severity": "high",
+      "status": "fixed",
+      "table": "public.tasks"
+    },
+    {
+      "check": "supabase.rls.public_read",
+      "gap": null,
+      "id": "supabase.rls.public_read.public.profiles.profiles-are-viewable-by-everyone",
+      "policy": "Profiles are viewable by everyone",
+      "reason": "Anyone may read every row. That is often intended, a catalogue or public profiles, so it is a decision for you, not something to fix blindly: confirm the table holds nothing private.",
+      "severity": "medium",
+      "status": "not_in_scope",
+      "table": "public.profiles"
+    }
+  ],
+  "migration": "supabase/migrations/20260115110001_offramp_rls.sql",
+  "schema": "offramp.fix/1",
+  "statements": 2,
+  "version": "20260115110001"
+}
