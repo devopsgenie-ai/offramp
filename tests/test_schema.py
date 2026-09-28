@@ -379,3 +379,34 @@ def test_the_rls_checks_read_the_scanned_schema_and_do_not_replay(tmp_path):
 def test_replay_still_answers_for_callers_that_want_the_raw_state(tmp_path):
     root = _migrations(tmp_path, {"001.sql": "create table t (id int);"})
     assert replay(root).tables["public.t"].rls is False
+
+
+def test_replay_accepts_an_extra_in_memory_migration(tmp_path):
+    """The fix's round trip replays the repository plus the file it is about to write,
+    without writing it anywhere first."""
+    root = _migrations(tmp_path, {"20260101000000_a.sql": "create table t (id int);"})
+    extra = [("supabase/migrations/20260101000001_offramp_rls.sql",
+              "alter table public.t enable row level security;")]
+    schema = detect_schema(root, extra=extra)
+    assert schema.migrations[-1] == "supabase/migrations/20260101000001_offramp_rls.sql"
+    assert _table_of(schema, "public.t").rls is True
+    assert _table_of(detect_schema(root), "public.t").rls is False
+
+
+def _table_of(schema, name):
+    return next(table for table in schema.tables if table.name == name)
+
+
+def test_quoted_identifiers_keep_escaped_quotes_and_inner_whitespace(tmp_path):
+    root = _migrations(tmp_path, {"001.sql": (
+        'create table public."odd ""name""; drop  --" (id int, "own""er" uuid);\n'
+        'create table public."two\nlines" (id int);\n'
+        'create policy "a ""b""" on public."odd ""name""; drop  --" for update using (true);'
+    )})
+    schema = detect_schema(root)
+    assert schema.unreplayable == []
+    names = [table.name for table in schema.tables]
+    assert names == ['public.odd "name"; drop  --', "public.two\nlines"]
+    odd = _table_of(schema, 'public.odd "name"; drop  --')
+    assert [c.name for c in odd.columns] == ["id", 'own"er']
+    assert [p.name for p in odd.policies] == ['a "b"']
