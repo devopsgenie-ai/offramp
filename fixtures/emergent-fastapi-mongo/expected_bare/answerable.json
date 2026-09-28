@@ -1,0 +1,95 @@
+{
+  "datastore.mongodb.mode": {
+    "evidence_scope": [],
+    "kind": "value",
+    "pointers": [
+      "/datastores/0/mode"
+    ],
+    "severity": "blocking"
+  },
+  "datastore.mongodb.version": {
+    "evidence_scope": [],
+    "kind": "value",
+    "pointers": [
+      "/datastores/0/version"
+    ],
+    "severity": "important"
+  },
+  "delivery.gitops_repo_url": {
+    "evidence_scope": [],
+    "kind": "value",
+    "pointers": [
+      "/delivery/gitops_repo_url"
+    ],
+    "severity": "blocking"
+  },
+  "delivery.image_registry": {
+    "evidence_scope": [],
+    "kind": "value",
+    "pointers": [
+      "/delivery/image_registry"
+    ],
+    "severity": "blocking"
+  },
+  "delivery.image_tag": {
+    "evidence_scope": [],
+    "kind": "value",
+    "pointers": [
+      "/delivery/image_tag"
+    ],
+    "severity": "important"
+  },
+  "delivery.ingress_class": {
+    "evidence_scope": [],
+    "kind": "value",
+    "pointers": [
+      "/delivery/ingress_class"
+    ],
+    "severity": "blocking"
+  },
+  "environment.production.namespace": {
+    "evidence_scope": [],
+    "kind": "value",
+    "pointers": [
+      "/environments/0/namespace"
+    ],
+    "severity": "blocking"
+  },
+  "routes.host": {
+    "evidence_scope": [],
+    "kind": "value",
+    "pointers": [
+      "/routes/0/host",
+      "/routes/1/host"
+    ],
+    "severity": "blocking"
+  },
+  "service.backend.env.UNUSED_LEGACY_FLAG": {
+    "evidence_scope": [
+      "backend"
+    ],
+    "kind": "value",
+    "pointers": [],
+    "severity": "cosmetic"
+  },
+  "service.backend.runtime.version": {
+    "evidence_scope": [
+      "backend"
+    ],
+    "kind": "value",
+    "pointers": [
+      "/services/backend/runtime/version"
+    ],
+    "severity": "important"
+  },
+  "service.frontend.runtime.version": {
+    "evidence_scope": [
+      "frontend"
+    ],
+    "kind": "value",
+    "pointers": [
+      "/services/frontend/runtime/version"
+    ],
+    "severity": "important"
+  }
+}

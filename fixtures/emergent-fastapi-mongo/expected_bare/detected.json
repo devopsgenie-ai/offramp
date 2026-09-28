@@ -1,0 +1,167 @@
+{
+  "datastores": [
+    {
+      "consumed_by": [
+        "backend"
+      ],
+      "env_keys": [
+        "MONGO_URL"
+      ],
+      "kind": "mongodb",
+      "mode": null,
+      "name": "mongodb",
+      "version": null
+    }
+  ],
+  "delivery": {
+    "gitops_repo_url": null,
+    "image_registry": null,
+    "image_tag": null,
+    "ingress_class": null,
+    "target_cluster": "in-cluster"
+  },
+  "environments": [
+    {
+      "name": "production",
+      "namespace": null,
+      "replicas": null,
+      "resources": null
+    }
+  ],
+  "name": "widgets",
+  "routes": [
+    {
+      "host": null,
+      "path": "/api/health",
+      "port": null,
+      "service": "backend",
+      "tls": false
+    },
+    {
+      "host": null,
+      "path": "/api/items",
+      "port": null,
+      "service": "backend",
+      "tls": false
+    }
+  ],
+  "services": [
+    {
+      "build": {
+        "build_cmd": null,
+        "context": "backend",
+        "dockerfile": null,
+        "install_cmd": "pip install -r requirements.txt",
+        "output_dir": null,
+        "start_cmd": "uvicorn server:app --host 0.0.0.0 --port 8001"
+      },
+      "env": [
+        {
+          "binding": "runtime",
+          "name": "DB_NAME",
+          "sensitive": false,
+          "source": "literal",
+          "value": "widgets"
+        },
+        {
+          "binding": "runtime",
+          "name": "ITEMS_PAGE_SIZE",
+          "sensitive": false,
+          "source": "literal",
+          "value": "20"
+        },
+        {
+          "binding": "runtime",
+          "name": "JWT_SECRET",
+          "sensitive": true,
+          "source": "literal",
+          "value": null
+        },
+        {
+          "binding": "runtime",
+          "name": "MONGO_URL",
+          "sensitive": true,
+          "source": "datastore",
+          "value": null
+        }
+      ],
+      "name": "backend",
+      "ports": [
+        8001
+      ],
+      "probes": [
+        {
+          "kind": "http",
+          "path": "/api/health",
+          "port": 8001,
+          "role": "liveness"
+        },
+        {
+          "kind": "http",
+          "path": "/api/health",
+          "port": 8001,
+          "role": "readiness"
+        }
+      ],
+      "replicas": 1,
+      "resources": {
+        "limits": {
+          "cpu": "500m",
+          "memory": "512Mi"
+        },
+        "requests": {
+          "cpu": "100m",
+          "memory": "256Mi"
+        }
+      },
+      "role": "api",
+      "runtime": {
+        "language": "python",
+        "version": null
+      }
+    },
+    {
+      "build": {
+        "build_cmd": "npm run build",
+        "context": "frontend",
+        "dockerfile": "frontend/Dockerfile",
+        "install_cmd": "npm install",
+        "output_dir": "build",
+        "start_cmd": null
+      },
+      "env": [
+        {
+          "binding": "build_arg",
+          "name": "REACT_APP_BACKEND_URL",
+          "sensitive": false,
+          "source": "literal",
+          "value": "https://widgets.preview.emergent.invalid"
+        }
+      ],
+      "name": "frontend",
+      "ports": [],
+      "probes": [],
+      "replicas": 1,
+      "resources": {
+        "limits": {
+          "cpu": "500m",
+          "memory": "512Mi"
+        },
+        "requests": {
+          "cpu": "100m",
+          "memory": "256Mi"
+        }
+      },
+      "role": "web",
+      "runtime": {
+        "language": "node",
+        "version": null
+      }
+    }
+  ],
+  "source": {
+    "commit": null,
+    "platform": "emergent",
+    "repo_url": "https://github.com/example-org/widgets.git"
+  }
+}

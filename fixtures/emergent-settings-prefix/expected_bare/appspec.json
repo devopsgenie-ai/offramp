@@ -1,0 +1,57 @@
+{
+  "datastores": [],
+  "delivery": {
+    "gitops_repo_url": null,
+    "image_registry": null,
+    "image_tag": null,
+    "ingress_class": null,
+    "target_cluster": "in-cluster"
+  },
+  "environments": [
+    {
+      "name": "production",
+      "namespace": null,
+      "replicas": null,
+      "resources": null
+    }
+  ],
+  "name": "settings-prefix",
+  "routes": [],
+  "services": [
+    {
+      "build": {
+        "build_cmd": null,
+        "context": "backend",
+        "dockerfile": null,
+        "install_cmd": "pip install -r requirements.txt",
+        "output_dir": null,
+        "start_cmd": "uvicorn server:app --host 0.0.0.0"
+      },
+      "env": [],
+      "name": "backend",
+      "ports": [],
+      "probes": [],
+      "replicas": 1,
+      "resources": {
+        "limits": {
+          "cpu": "500m",
+          "memory": "512Mi"
+        },
+        "requests": {
+          "cpu": "100m",
+          "memory": "256Mi"
+        }
+      },
+      "role": "api",
+      "runtime": {
+        "language": "python",
+        "version": null
+      }
+    }
+  ],
+  "source": {
+    "commit": null,
+    "platform": "unknown",
+    "repo_url": "https://github.com/example-org/settings-prefix.git"
+  }
+}
