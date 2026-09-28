@@ -233,6 +233,11 @@ def _fix_section(fix: TableFix, titles: dict[str, str]) -> list[str]:
     lines += [f"- Closes: {titles[f]} (`{f}`)" for f in fix.fixed]
     if fix.enable:
         lines.append("- Turns row-level security on.")
+        waking = [p for p in table.policies if p not in fix.drops]
+        if waking:
+            lines.append("- These policies were written earlier but do nothing while "
+                         "row-level security is off. They take effect now: "
+                         + ", ".join(f'"{p.name}" ({p.evidence})' for p in waking) + ".")
     for policy in fix.drops:
         lines.append(f'- Removes the policy "{policy.name}" ({policy.evidence}). To undo, '
                      f"re-create it from that line.")

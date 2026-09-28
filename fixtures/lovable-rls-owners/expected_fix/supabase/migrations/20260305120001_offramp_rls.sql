@@ -12,31 +12,19 @@
 -- want:
 --   drop policy if exists "Signed-in users can update assignments" on public.assignments;
 
--- fixed: supabase.rls.disabled.public.bookmarks
--- Owner: user_id, because:
---   it references auth.users.id
-alter table public.bookmarks enable row level security;
--- only the row's owner can insert
-create policy "offramp: owner can insert" on public.bookmarks
-  as permissive for insert to authenticated
-  with check ((select auth.uid()) = user_id);
--- only the row's owner can update
-create policy "offramp: owner can update" on public.bookmarks
-  as permissive for update to authenticated
-  using ((select auth.uid()) = user_id)
-  with check ((select auth.uid()) = user_id);
--- only the row's owner can delete
-create policy "offramp: owner can delete" on public.bookmarks
-  as permissive for delete to authenticated
-  using ((select auth.uid()) = user_id);
--- keeps today's reads: with RLS off, anyone could read
-create policy "offramp: anyone can read" on public.bookmarks
-  as permissive for select to anon, authenticated
-  using (true);
+-- NOT FIXED: supabase.rls.disabled.public.bookmarks
+-- `user_id` references auth.users.id, but nothing says the user it names is the one who
+-- writes the row: no policy compares it to auth.uid(), and it has no `default
+-- auth.uid()`. It is proposed, which is not evidence. So no policy is written for
+-- public.bookmarks.
+-- Gap: datastore.supabase.table.public.bookmarks.write_scope
+-- Enabling row-level security with no policy makes the table unreachable from the app.
+-- If only your server uses this table, that is what you want:
+--   alter table public.bookmarks enable row level security;
 
 -- fixed: supabase.rls.permissive_write.public.comments.anyone-can-do-anything-with-comments
 -- Owner: profile_id, because:
---   it references public.profiles.id, whose primary key references auth.users.id
+--   it references public.profiles.id, whose primary key references auth.users.id, and defaults to auth.uid()
 -- "Anyone can do anything with comments" was granted to anyone. Its replacements are
 -- granted to authenticated: auth.uid() is null for a request that is not signed in, so
 -- an owner check granted to anon could never pass.
@@ -62,7 +50,7 @@ create policy "offramp: anyone can read" on public.comments
 -- NOT FIXED: supabase.rls.permissive_write.public.drafts.anyone-can-delete-drafts
 -- The policy that would prove the owner was written before a column it names was
 -- renamed, so the migrations no longer say which column it means: policy "Authors can
--- read their drafts" names `author` (supabase/migrations/20260302100000_tables.sql:68).
+-- read their drafts" names `author` (supabase/migrations/20260302100000_tables.sql:79).
 -- `author_id` is proposed from its name alone, which is not evidence. So no policy is
 -- written for public.drafts.
 -- Gap: datastore.supabase.table.public.drafts.write_scope
@@ -73,7 +61,7 @@ create policy "offramp: anyone can read" on public.comments
 -- NOT FIXED: supabase.rls.permissive_write.public.invoices.anyone-signed-in-can-delete-invoices
 -- More than one column could be the owner, and nothing says which: `customer_id`
 -- (policy "Customers can view their invoices" compares it to auth.uid()
--- (supabase/migrations/20260302100000_tables.sql:56)); `issuer_id` (it references
+-- (supabase/migrations/20260302100000_tables.sql:67)); `issuer_id` (it references
 -- auth.users.id). So no policy is written for public.invoices.
 -- Gap: datastore.supabase.table.public.invoices.write_scope
 -- Dropping the open policy leaves this change to your server alone. If that is what you
@@ -82,7 +70,7 @@ create policy "offramp: anyone can read" on public.comments
 
 -- fixed: supabase.rls.disabled.public.journal
 -- Owner: user_id, because:
---   it references auth.users.id
+--   it references auth.users.id and defaults to auth.uid()
 alter table public.journal enable row level security;
 -- only the row's owner can insert
 create policy "offramp: owner can insert" on public.journal
@@ -112,8 +100,30 @@ create policy "offramp: anyone can read" on public.journal
 
 -- fixed: supabase.rls.permissive_write.public.projects.members-can-update-projects
 -- Owner: owner_id, because:
---   policy "Owners can update projects" compares it to auth.uid() (supabase/migrations/20260302100000_tables.sql:82)
---   policy "Owners can view projects" compares it to auth.uid() (supabase/migrations/20260302100000_tables.sql:80)
+--   policy "Owners can update projects" compares it to auth.uid() (supabase/migrations/20260302100000_tables.sql:93)
+--   policy "Owners can view projects" compares it to auth.uid() (supabase/migrations/20260302100000_tables.sql:91)
 --   it references auth.users.id
 -- update: already covered by "Owners can update projects".
 drop policy if exists "Members can update projects" on public.projects;
+
+-- fixed: supabase.rls.disabled.public.reminders
+-- Owner: user_id, because:
+--   policy "Users see their reminders" compares it to auth.uid() (supabase/migrations/20260302100000_tables.sql:26)
+alter table public.reminders enable row level security;
+-- only the row's owner can insert
+create policy "offramp: owner can insert" on public.reminders
+  as permissive for insert to authenticated
+  with check ((select auth.uid()) = user_id);
+-- only the row's owner can update
+create policy "offramp: owner can update" on public.reminders
+  as permissive for update to authenticated
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
+-- only the row's owner can delete
+create policy "offramp: owner can delete" on public.reminders
+  as permissive for delete to authenticated
+  using ((select auth.uid()) = user_id);
+-- keeps today's reads: with RLS off, anyone could read
+create policy "offramp: anyone can read" on public.reminders
+  as permissive for select to anon, authenticated
+  using (true);

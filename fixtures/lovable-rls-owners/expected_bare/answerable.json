@@ -13,6 +13,14 @@
     ],
     "severity": "blocking"
   },
+  "datastore.supabase.table.public.bookmarks.write_scope": {
+    "evidence_scope": [],
+    "kind": "value",
+    "pointers": [
+      "/datastores/0/schema/tables/1/write_scope"
+    ],
+    "severity": "blocking"
+  },
   "datastore.supabase.table.public.drafts.write_scope": {
     "evidence_scope": [],
     "kind": "value",

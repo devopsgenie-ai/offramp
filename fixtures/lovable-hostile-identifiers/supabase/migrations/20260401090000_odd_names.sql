@@ -11,7 +11,7 @@ CREATE TABLE public."Journal ""Entries""; DROP TABLE public.profiles; --" (
 -- A reserved word as the table name and as the owner column.
 CREATE TABLE public."order" (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  "user" UUID NOT NULL REFERENCES auth.users(id),
+  "user" UUID NOT NULL DEFAULT auth.uid() REFERENCES auth.users(id),
   total_cents INTEGER NOT NULL
 );
 
@@ -20,7 +20,7 @@ CREATE TABLE public."order" (
 CREATE TABLE public."notes
 alter table public.profiles disable row level security; --" (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES auth.users(id),
+  user_id UUID NOT NULL DEFAULT auth.uid() REFERENCES auth.users(id),
   body TEXT
 );
 ALTER TABLE public."notes

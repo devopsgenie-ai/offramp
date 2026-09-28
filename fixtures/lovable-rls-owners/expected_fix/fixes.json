@@ -5,19 +5,19 @@
     "platform": "lovable"
   },
   "expected_after": [
-    "supabase.rls.public_read.public.bookmarks.offramp-anyone-can-read",
     "supabase.rls.public_read.public.comments.offramp-anyone-can-read",
-    "supabase.rls.public_read.public.journal.offramp-anyone-can-read"
+    "supabase.rls.public_read.public.journal.offramp-anyone-can-read",
+    "supabase.rls.public_read.public.reminders.offramp-anyone-can-read"
   ],
   "findings": [
     {
       "check": "supabase.rls.disabled",
-      "gap": null,
+      "gap": "datastore.supabase.table.public.bookmarks.write_scope",
       "id": "supabase.rls.disabled.public.bookmarks",
       "policy": null,
-      "reason": "",
+      "reason": "`user_id` references auth.users.id, but nothing says the user it names is the one who writes the row: no policy compares it to auth.uid(), and it has no `default auth.uid()`. It is proposed, which is not evidence.",
       "severity": "critical",
-      "status": "fixed",
+      "status": "gap",
       "table": "public.bookmarks"
     },
     {
@@ -39,6 +39,16 @@
       "severity": "critical",
       "status": "gap",
       "table": "public.notes"
+    },
+    {
+      "check": "supabase.rls.disabled",
+      "gap": null,
+      "id": "supabase.rls.disabled.public.reminders",
+      "policy": null,
+      "reason": "",
+      "severity": "critical",
+      "status": "fixed",
+      "table": "public.reminders"
     },
     {
       "check": "supabase.rls.permissive_write",
@@ -65,7 +75,7 @@
       "gap": "datastore.supabase.table.public.drafts.write_scope",
       "id": "supabase.rls.permissive_write.public.drafts.anyone-can-delete-drafts",
       "policy": "Anyone can delete drafts",
-      "reason": "The policy that would prove the owner was written before a column it names was renamed, so the migrations no longer say which column it means: policy \"Authors can read their drafts\" names `author` (supabase/migrations/20260302100000_tables.sql:68). `author_id` is proposed from its name alone, which is not evidence.",
+      "reason": "The policy that would prove the owner was written before a column it names was renamed, so the migrations no longer say which column it means: policy \"Authors can read their drafts\" names `author` (supabase/migrations/20260302100000_tables.sql:79). `author_id` is proposed from its name alone, which is not evidence.",
       "severity": "high",
       "status": "gap",
       "table": "public.drafts"
@@ -75,7 +85,7 @@
       "gap": "datastore.supabase.table.public.invoices.write_scope",
       "id": "supabase.rls.permissive_write.public.invoices.anyone-signed-in-can-delete-invoices",
       "policy": "Anyone signed in can delete invoices",
-      "reason": "More than one column could be the owner, and nothing says which: `customer_id` (policy \"Customers can view their invoices\" compares it to auth.uid() (supabase/migrations/20260302100000_tables.sql:56)); `issuer_id` (it references auth.users.id).",
+      "reason": "More than one column could be the owner, and nothing says which: `customer_id` (policy \"Customers can view their invoices\" compares it to auth.uid() (supabase/migrations/20260302100000_tables.sql:67)); `issuer_id` (it references auth.users.id).",
       "severity": "high",
       "status": "gap",
       "table": "public.invoices"

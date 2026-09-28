@@ -1,6 +1,6 @@
 # Readiness audit: team-journal (lovable)
 
-critical: 3  high: 5  medium: 1  low: 0 · 7 checks: 2 found, 4 clean, 1 not applicable, 0 could not assess
+critical: 4  high: 5  medium: 1  low: 0 · 7 checks: 2 found, 4 clean, 1 not applicable, 0 could not assess
 
 This report is produced by reading the repository only. It sends no request to the running application and holds no credential. Secret values are never copied into it; findings cite a file and line instead.
 
@@ -10,7 +10,7 @@ This report is produced by reading the repository only. It sends no request to t
 
 `public.bookmarks` is created in the migrations and row-level security is never enabled on it. Supabase exposes tables in `public` through its API, and the key that reaches that API is in every visitor's browser. Anyone can read, change and delete every row.
 
-- evidence: `supabase/migrations/20260302100000_tables.sql:12`
+- evidence: `supabase/migrations/20260302100000_tables.sql:13`
 - remedy: Enable row-level security on the table and add policies scoped to the row's owner. Until then, treat the data in it as exposed.
 - id: `supabase.rls.disabled.public.bookmarks`
 
@@ -26,9 +26,17 @@ This report is produced by reading the repository only. It sends no request to t
 
 `public.notes` is created in the migrations and row-level security is never enabled on it. Supabase exposes tables in `public` through its API, and the key that reaches that API is in every visitor's browser. Anyone can read, change and delete every row.
 
-- evidence: `supabase/migrations/20260302100000_tables.sql:19`
+- evidence: `supabase/migrations/20260302100000_tables.sql:30`
 - remedy: Enable row-level security on the table and add policies scoped to the row's owner. Until then, treat the data in it as exposed.
 - id: `supabase.rls.disabled.public.notes`
+
+### Table `public.reminders` has no row-level security
+
+`public.reminders` is created in the migrations and row-level security is never enabled on it. Supabase exposes tables in `public` through its API, and the key that reaches that API is in every visitor's browser. Anyone can read, change and delete every row.
+
+- evidence: `supabase/migrations/20260302100000_tables.sql:21`
+- remedy: Enable row-level security on the table and add policies scoped to the row's owner. Until then, treat the data in it as exposed.
+- id: `supabase.rls.disabled.public.reminders`
 
 ## high
 
@@ -36,7 +44,7 @@ This report is produced by reading the repository only. It sends no request to t
 
 The policy "Signed-in users can update assignments" on `public.assignments` allows UPDATE for any signed-in user. If sign-up is open, that is anyone. Its condition is simply `true`, so it never checks whose row it is.
 
-- evidence: `supabase/migrations/20260302100000_tables.sql:44`
+- evidence: `supabase/migrations/20260302100000_tables.sql:55`
 - remedy: Replace `true` with a condition on the row's owner, for example `auth.uid() = user_id`, or remove the policy if nobody should do this.
 - id: `supabase.rls.permissive_write.public.assignments.signed-in-users-can-update-assignments`
 
@@ -44,7 +52,7 @@ The policy "Signed-in users can update assignments" on `public.assignments` allo
 
 The policy "Anyone can do anything with comments" on `public.comments` allows every operation for anyone, without signing in. Its condition is simply `true`, so it never checks whose row it is.
 
-- evidence: `supabase/migrations/20260302100000_tables.sql:33`
+- evidence: `supabase/migrations/20260302100000_tables.sql:44`
 - remedy: Replace `true` with a condition on the row's owner, for example `auth.uid() = user_id`, or remove the policy if nobody should do this.
 - id: `supabase.rls.permissive_write.public.comments.anyone-can-do-anything-with-comments`
 
@@ -52,7 +60,7 @@ The policy "Anyone can do anything with comments" on `public.comments` allows ev
 
 The policy "Anyone can delete drafts" on `public.drafts` allows DELETE for anyone, without signing in. Its condition is simply `true`, so it never checks whose row it is.
 
-- evidence: `supabase/migrations/20260302100000_tables.sql:70`
+- evidence: `supabase/migrations/20260302100000_tables.sql:81`
 - remedy: Replace `true` with a condition on the row's owner, for example `auth.uid() = user_id`, or remove the policy if nobody should do this.
 - id: `supabase.rls.permissive_write.public.drafts.anyone-can-delete-drafts`
 
@@ -60,7 +68,7 @@ The policy "Anyone can delete drafts" on `public.drafts` allows DELETE for anyon
 
 The policy "Anyone signed in can delete invoices" on `public.invoices` allows DELETE for any signed-in user. If sign-up is open, that is anyone. Its condition is simply `true`, so it never checks whose row it is.
 
-- evidence: `supabase/migrations/20260302100000_tables.sql:58`
+- evidence: `supabase/migrations/20260302100000_tables.sql:69`
 - remedy: Replace `true` with a condition on the row's owner, for example `auth.uid() = user_id`, or remove the policy if nobody should do this.
 - id: `supabase.rls.permissive_write.public.invoices.anyone-signed-in-can-delete-invoices`
 
@@ -68,7 +76,7 @@ The policy "Anyone signed in can delete invoices" on `public.invoices` allows DE
 
 The policy "Members can update projects" on `public.projects` allows UPDATE for any signed-in user. If sign-up is open, that is anyone. Its condition is simply `true`, so it never checks whose row it is.
 
-- evidence: `supabase/migrations/20260302100000_tables.sql:85`
+- evidence: `supabase/migrations/20260302100000_tables.sql:96`
 - remedy: Replace `true` with a condition on the row's owner, for example `auth.uid() = user_id`, or remove the policy if nobody should do this.
 - id: `supabase.rls.permissive_write.public.projects.members-can-update-projects`
 
@@ -78,7 +86,7 @@ The policy "Members can update projects" on `public.projects` allows UPDATE for 
 
 The policy "Anyone can join the waitlist" on `public.waitlist` allows INSERT for anyone, without signing in. Its condition is simply `true`, so it never checks whose row it is.
 
-- evidence: `supabase/migrations/20260302100000_tables.sql:94`
+- evidence: `supabase/migrations/20260302100000_tables.sql:105`
 - remedy: Replace `true` with a condition on the row's owner, for example `auth.uid() = user_id`, or remove the policy if nobody should do this.
 - id: `supabase.rls.permissive_write.public.waitlist.anyone-can-join-the-waitlist`
 

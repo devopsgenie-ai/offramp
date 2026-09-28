@@ -44,7 +44,7 @@
             "rls": false,
             "write_scope": {
               "basis": [
-                "it references auth.users.id"
+                "it references auth.users.id and defaults to auth.uid()"
               ],
               "column": "Owner ID",
               "kind": "owner"
@@ -60,7 +60,7 @@
                 "references": null
               },
               {
-                "default": null,
+                "default": "auth.uid()",
                 "name": "user_id",
                 "nullable": false,
                 "primary_key": false,
@@ -93,7 +93,7 @@
             "rls": true,
             "write_scope": {
               "basis": [
-                "it references auth.users.id"
+                "it references auth.users.id and defaults to auth.uid()"
               ],
               "column": "user_id",
               "kind": "owner"
@@ -109,7 +109,7 @@
                 "references": null
               },
               {
-                "default": null,
+                "default": "auth.uid()",
                 "name": "user",
                 "nullable": false,
                 "primary_key": false,
@@ -129,7 +129,7 @@
             "rls": false,
             "write_scope": {
               "basis": [
-                "it references auth.users.id"
+                "it references auth.users.id and defaults to auth.uid()"
               ],
               "column": "user",
               "kind": "owner"

@@ -47,7 +47,7 @@
       "check": "supabase.rls.disabled",
       "detail": "`public.bookmarks` is created in the migrations and row-level security is never enabled on it. Supabase exposes tables in `public` through its API, and the key that reaches that API is in every visitor's browser. Anyone can read, change and delete every row.",
       "evidence": [
-        "supabase/migrations/20260302100000_tables.sql:12"
+        "supabase/migrations/20260302100000_tables.sql:13"
       ],
       "id": "supabase.rls.disabled.public.bookmarks",
       "related_gaps": [],
@@ -79,7 +79,7 @@
       "check": "supabase.rls.disabled",
       "detail": "`public.notes` is created in the migrations and row-level security is never enabled on it. Supabase exposes tables in `public` through its API, and the key that reaches that API is in every visitor's browser. Anyone can read, change and delete every row.",
       "evidence": [
-        "supabase/migrations/20260302100000_tables.sql:19"
+        "supabase/migrations/20260302100000_tables.sql:30"
       ],
       "id": "supabase.rls.disabled.public.notes",
       "related_gaps": [],
@@ -92,10 +92,26 @@
     },
     {
       "category": "security",
+      "check": "supabase.rls.disabled",
+      "detail": "`public.reminders` is created in the migrations and row-level security is never enabled on it. Supabase exposes tables in `public` through its API, and the key that reaches that API is in every visitor's browser. Anyone can read, change and delete every row.",
+      "evidence": [
+        "supabase/migrations/20260302100000_tables.sql:21"
+      ],
+      "id": "supabase.rls.disabled.public.reminders",
+      "related_gaps": [],
+      "remedy": "Enable row-level security on the table and add policies scoped to the row's owner. Until then, treat the data in it as exposed.",
+      "severity": "critical",
+      "subject": {
+        "table": "public.reminders"
+      },
+      "title": "Table `public.reminders` has no row-level security"
+    },
+    {
+      "category": "security",
       "check": "supabase.rls.permissive_write",
       "detail": "The policy \"Signed-in users can update assignments\" on `public.assignments` allows UPDATE for any signed-in user. If sign-up is open, that is anyone. Its condition is simply `true`, so it never checks whose row it is.",
       "evidence": [
-        "supabase/migrations/20260302100000_tables.sql:44"
+        "supabase/migrations/20260302100000_tables.sql:55"
       ],
       "id": "supabase.rls.permissive_write.public.assignments.signed-in-users-can-update-assignments",
       "related_gaps": [],
@@ -112,7 +128,7 @@
       "check": "supabase.rls.permissive_write",
       "detail": "The policy \"Anyone can do anything with comments\" on `public.comments` allows every operation for anyone, without signing in. Its condition is simply `true`, so it never checks whose row it is.",
       "evidence": [
-        "supabase/migrations/20260302100000_tables.sql:33"
+        "supabase/migrations/20260302100000_tables.sql:44"
       ],
       "id": "supabase.rls.permissive_write.public.comments.anyone-can-do-anything-with-comments",
       "related_gaps": [],
@@ -129,7 +145,7 @@
       "check": "supabase.rls.permissive_write",
       "detail": "The policy \"Anyone can delete drafts\" on `public.drafts` allows DELETE for anyone, without signing in. Its condition is simply `true`, so it never checks whose row it is.",
       "evidence": [
-        "supabase/migrations/20260302100000_tables.sql:70"
+        "supabase/migrations/20260302100000_tables.sql:81"
       ],
       "id": "supabase.rls.permissive_write.public.drafts.anyone-can-delete-drafts",
       "related_gaps": [],
@@ -146,7 +162,7 @@
       "check": "supabase.rls.permissive_write",
       "detail": "The policy \"Anyone signed in can delete invoices\" on `public.invoices` allows DELETE for any signed-in user. If sign-up is open, that is anyone. Its condition is simply `true`, so it never checks whose row it is.",
       "evidence": [
-        "supabase/migrations/20260302100000_tables.sql:58"
+        "supabase/migrations/20260302100000_tables.sql:69"
       ],
       "id": "supabase.rls.permissive_write.public.invoices.anyone-signed-in-can-delete-invoices",
       "related_gaps": [],
@@ -163,7 +179,7 @@
       "check": "supabase.rls.permissive_write",
       "detail": "The policy \"Members can update projects\" on `public.projects` allows UPDATE for any signed-in user. If sign-up is open, that is anyone. Its condition is simply `true`, so it never checks whose row it is.",
       "evidence": [
-        "supabase/migrations/20260302100000_tables.sql:85"
+        "supabase/migrations/20260302100000_tables.sql:96"
       ],
       "id": "supabase.rls.permissive_write.public.projects.members-can-update-projects",
       "related_gaps": [],
@@ -180,7 +196,7 @@
       "check": "supabase.rls.permissive_write",
       "detail": "The policy \"Anyone can join the waitlist\" on `public.waitlist` allows INSERT for anyone, without signing in. Its condition is simply `true`, so it never checks whose row it is.",
       "evidence": [
-        "supabase/migrations/20260302100000_tables.sql:94"
+        "supabase/migrations/20260302100000_tables.sql:105"
       ],
       "id": "supabase.rls.permissive_write.public.waitlist.anyone-can-join-the-waitlist",
       "related_gaps": [],
@@ -239,7 +255,7 @@
       "not_applicable": 1
     },
     "findings": {
-      "critical": 3,
+      "critical": 4,
       "high": 5,
       "low": 0,
       "medium": 1

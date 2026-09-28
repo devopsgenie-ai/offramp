@@ -211,7 +211,7 @@ def test_an_anonymous_insert_and_the_undetermined_tables_are_untouched():
 
 def test_fixes_md_names_nullable_owners_and_missing_defaults():
     fixes = _render(OWNERS).files["FIXES.md"]
-    bookmarks = fixes.split("### `public.bookmarks`")[1].split("###")[0]
+    bookmarks = fixes.split("### `public.reminders`")[1].split("###")[0]
     assert "allows NULL" in bookmarks
     assert "no default" in bookmarks
     journal = fixes.split("### `public.journal`")[1].split("###")[0]
@@ -274,7 +274,8 @@ def test_a_read_condition_the_replay_cannot_reproduce_is_not_rewritten(tmp_path)
     """The replay masks string literals, so `status = 'open'` is stored as `status = ''`.
     Rewriting it would change what anyone can read, so the table is left alone."""
     root = _app(tmp_path, """
-        create table t (id int, user_id uuid references auth.users(id), status text);
+        create table t (id int, user_id uuid default auth.uid() references auth.users(id),
+          status text);
         alter table t enable row level security;
         create policy "all" on t for all using (status = 'open') with check (true);""")
     rendering = _render(root)
@@ -307,3 +308,28 @@ def test_the_owner_comment_quotes_the_column():
     sql = _migration(_render(HOSTILE))
     assert '-- Owner: "Owner ID", because:' in sql
     assert '-- Owner: "user", because:' in sql
+
+
+def test_an_all_policy_with_only_a_check_grants_no_reads_so_none_is_kept(tmp_path):
+    """PostgreSQL stores no USING for `for all ... with check (true)`, and such a policy
+    makes no row visible (verified on PostgreSQL 15: 0 rows, UPDATE 0). Its exposure is
+    inserting anything. There is no read half to keep, and inventing one would open
+    reads the app never had."""
+    root = _app(tmp_path, """
+        create table docs (id uuid primary key,
+          user_id uuid default auth.uid() references auth.users(id));
+        alter table docs enable row level security;
+        create policy "anything" on docs for all to authenticated with check (true);""")
+    statements = _statements(_migration(_render(root)))
+    assert not any("for select" in s for s in statements)
+    assert statements[0] == 'drop policy if exists "anything" on public.docs'
+
+
+def test_fixes_md_names_the_policies_that_enabling_rls_activates():
+    """Policies written on a table whose RLS was never enabled do nothing today. The fix
+    turns them on (Advisor lint 0007), and the reader has to know which."""
+    fixes = _render(OWNERS).files["FIXES.md"]
+    reminders = fixes.split("### `public.reminders`")[1].split("###")[0]
+    assert ('"Users see their reminders" (supabase/migrations/20260302100000_tables.sql:'
+            in reminders)
+    assert "take effect" in reminders

@@ -23,7 +23,10 @@ CHANGE_COMMANDS = ("all", "update", "delete")
 ANYONE = ("anon", "public")
 SIGNED_IN = ("authenticated",)
 
-_UID = r"(?:auth\.uid\(\s*\)|\(\s*select\s+auth\.uid\(\s*\)\s*\))"
+#: `auth.uid()`, quoted or not (pg_dump quotes every name), bare or as Supabase's
+#: initplan subselect, which pg_dump deparses with an `as uid` alias.
+_CALL = r'"?auth"?\s*\.\s*"?uid"?\(\s*\)'
+_UID = rf'(?:{_CALL}|\(\s*select\s+{_CALL}(?:\s+as\s+"?uid"?)?\s*\))'
 _NAME = r'"(?:[^"]|"")+"|[a-z_][a-z0-9_$]*'
 _COLUMN = rf"(?:(?P<qualifier>{_NAME})\s*\.\s*)?(?P<column>{_NAME})"
 _OWNER = (re.compile(rf"^{_UID}\s*=\s*{_COLUMN}$"), re.compile(rf"^{_COLUMN}\s*=\s*{_UID}$"))
@@ -75,7 +78,8 @@ def owner_column(expression: str | None, table: str) -> str | None:
     """The column an expression compares to `auth.uid()`, when that is all it does.
 
     Exactly `auth.uid() = col`, `col = auth.uid()`, or either with `(select
-    auth.uid())`, optionally qualified by the table's own name. A compound expression
+    auth.uid())`, optionally qualified by the table's own name, and in pg_dump's quoted
+    spelling. A compound expression
     (`... or is_admin()`), a cast, or anything else is not evidence of an owner.
     Expressions arrive normalised: lower-cased, outer parentheses and runs of spaces
     removed.
