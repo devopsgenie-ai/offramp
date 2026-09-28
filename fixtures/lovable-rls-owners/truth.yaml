@@ -1,0 +1,53 @@
+# The awkward cases for owner detection and the fix renderer, on purpose (RFC-0003,
+# Testing). Each table in the migrations says which case it carries.
+app:
+  name: team-journal
+  platform: lovable
+services:
+  - name: web
+    role: web
+    language: node
+    install_cmd: npm ci
+    dockerfile: null
+    routes: []
+    env: []
+    probes: []
+datastores:
+  - name: supabase
+    kind: postgres
+    consumed_by: [web]
+    env_keys: []
+committed_credentials: []
+
+write_scope:
+  public.profiles: id               # its primary key references auth.users; a policy agrees
+  public.journal: user_id           # inline references auth.users
+  public.bookmarks: user_id         # references auth.users (bare), nullable
+  public.comments: profile_id       # one hop through profiles(id)
+  public.projects: owner_id         # policy and foreign key agree
+  public.notes: undetermined        # a name alone
+  public.assignments: undetermined  # two foreign keys to auth.users
+  public.invoices: undetermined     # policy says customer_id, foreign key says issuer_id
+  public.drafts: undetermined       # the policy's column was renamed after it
+
+findings:
+  - supabase.rls.disabled.public.journal
+  - supabase.rls.disabled.public.bookmarks
+  - supabase.rls.disabled.public.notes
+  - supabase.rls.permissive_write.public.comments.anyone-can-do-anything-with-comments
+  - supabase.rls.permissive_write.public.assignments.signed-in-users-can-update-assignments
+  - supabase.rls.permissive_write.public.invoices.anyone-signed-in-can-delete-invoices
+  - supabase.rls.permissive_write.public.drafts.anyone-can-delete-drafts
+  - supabase.rls.permissive_write.public.projects.members-can-update-projects
+  # medium: an anonymous form, left for a human to decide
+  - supabase.rls.permissive_write.public.waitlist.anyone-can-join-the-waitlist
+  # Deliberately absent: profiles (owner-scoped only), and no public_read, because no
+  # SELECT policy here is open to anyone. The ALL policy on comments is not a SELECT.
+assessments:
+  credential.committed: clean
+  platform.hardcoded_url: clean
+  frontend.secret_in_bundle: clean
+  service.no_health_endpoint: not_applicable
+  supabase.rls.disabled: found
+  supabase.rls.permissive_write: found
+  supabase.rls.public_read: clean

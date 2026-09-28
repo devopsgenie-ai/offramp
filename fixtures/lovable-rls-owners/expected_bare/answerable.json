@@ -1,0 +1,90 @@
+{
+  "datastore.supabase.mode": {
+    "evidence_scope": [],
+    "kind": "value",
+    "pointers": [],
+    "severity": "blocking"
+  },
+  "datastore.supabase.table.public.assignments.write_scope": {
+    "evidence_scope": [],
+    "kind": "value",
+    "pointers": [
+      "/datastores/0/schema/tables/0/write_scope"
+    ],
+    "severity": "blocking"
+  },
+  "datastore.supabase.table.public.drafts.write_scope": {
+    "evidence_scope": [],
+    "kind": "value",
+    "pointers": [
+      "/datastores/0/schema/tables/3/write_scope"
+    ],
+    "severity": "blocking"
+  },
+  "datastore.supabase.table.public.invoices.write_scope": {
+    "evidence_scope": [],
+    "kind": "value",
+    "pointers": [
+      "/datastores/0/schema/tables/4/write_scope"
+    ],
+    "severity": "blocking"
+  },
+  "datastore.supabase.table.public.notes.write_scope": {
+    "evidence_scope": [],
+    "kind": "value",
+    "pointers": [
+      "/datastores/0/schema/tables/6/write_scope"
+    ],
+    "severity": "blocking"
+  },
+  "delivery.gitops_repo_url": {
+    "evidence_scope": [],
+    "kind": "value",
+    "pointers": [
+      "/delivery/gitops_repo_url"
+    ],
+    "severity": "blocking"
+  },
+  "delivery.image_registry": {
+    "evidence_scope": [],
+    "kind": "value",
+    "pointers": [
+      "/delivery/image_registry"
+    ],
+    "severity": "blocking"
+  },
+  "delivery.image_tag": {
+    "evidence_scope": [],
+    "kind": "value",
+    "pointers": [
+      "/delivery/image_tag"
+    ],
+    "severity": "important"
+  },
+  "delivery.ingress_class": {
+    "evidence_scope": [],
+    "kind": "value",
+    "pointers": [
+      "/delivery/ingress_class"
+    ],
+    "severity": "blocking"
+  },
+  "environment.production.namespace": {
+    "evidence_scope": [],
+    "kind": "value",
+    "pointers": [
+      "/environments/0/namespace"
+    ],
+    "severity": "blocking"
+  },
+  "service.web.runtime.version": {
+    "evidence_scope": [
+      "."
+    ],
+    "kind": "value",
+    "pointers": [
+      "/services/web/runtime/version"
+    ],
+    "severity": "important"
+  }
+}

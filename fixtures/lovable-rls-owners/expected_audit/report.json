@@ -1,0 +1,248 @@
+{
+  "app": {
+    "commit": null,
+    "name": "team-journal",
+    "platform": "lovable"
+  },
+  "assessments": [
+    {
+      "check": "credential.committed",
+      "reason": null,
+      "status": "clean"
+    },
+    {
+      "check": "frontend.secret_in_bundle",
+      "reason": null,
+      "status": "clean"
+    },
+    {
+      "check": "platform.hardcoded_url",
+      "reason": null,
+      "status": "clean"
+    },
+    {
+      "check": "service.no_health_endpoint",
+      "reason": "no backend service in the repository",
+      "status": "not_applicable"
+    },
+    {
+      "check": "supabase.rls.disabled",
+      "reason": null,
+      "status": "found"
+    },
+    {
+      "check": "supabase.rls.permissive_write",
+      "reason": null,
+      "status": "found"
+    },
+    {
+      "check": "supabase.rls.public_read",
+      "reason": null,
+      "status": "clean"
+    }
+  ],
+  "findings": [
+    {
+      "category": "security",
+      "check": "supabase.rls.disabled",
+      "detail": "`public.bookmarks` is created in the migrations and row-level security is never enabled on it. Supabase exposes tables in `public` through its API, and the key that reaches that API is in every visitor's browser. Anyone can read, change and delete every row.",
+      "evidence": [
+        "supabase/migrations/20260302100000_tables.sql:12"
+      ],
+      "id": "supabase.rls.disabled.public.bookmarks",
+      "related_gaps": [],
+      "remedy": "Enable row-level security on the table and add policies scoped to the row's owner. Until then, treat the data in it as exposed.",
+      "severity": "critical",
+      "subject": {
+        "table": "public.bookmarks"
+      },
+      "title": "Table `public.bookmarks` has no row-level security"
+    },
+    {
+      "category": "security",
+      "check": "supabase.rls.disabled",
+      "detail": "`public.journal` is created in the migrations and row-level security is never enabled on it. Supabase exposes tables in `public` through its API, and the key that reaches that API is in every visitor's browser. Anyone can read, change and delete every row.",
+      "evidence": [
+        "supabase/migrations/20260302100000_tables.sql:5"
+      ],
+      "id": "supabase.rls.disabled.public.journal",
+      "related_gaps": [],
+      "remedy": "Enable row-level security on the table and add policies scoped to the row's owner. Until then, treat the data in it as exposed.",
+      "severity": "critical",
+      "subject": {
+        "table": "public.journal"
+      },
+      "title": "Table `public.journal` has no row-level security"
+    },
+    {
+      "category": "security",
+      "check": "supabase.rls.disabled",
+      "detail": "`public.notes` is created in the migrations and row-level security is never enabled on it. Supabase exposes tables in `public` through its API, and the key that reaches that API is in every visitor's browser. Anyone can read, change and delete every row.",
+      "evidence": [
+        "supabase/migrations/20260302100000_tables.sql:19"
+      ],
+      "id": "supabase.rls.disabled.public.notes",
+      "related_gaps": [],
+      "remedy": "Enable row-level security on the table and add policies scoped to the row's owner. Until then, treat the data in it as exposed.",
+      "severity": "critical",
+      "subject": {
+        "table": "public.notes"
+      },
+      "title": "Table `public.notes` has no row-level security"
+    },
+    {
+      "category": "security",
+      "check": "supabase.rls.permissive_write",
+      "detail": "The policy \"Signed-in users can update assignments\" on `public.assignments` allows UPDATE for any signed-in user. If sign-up is open, that is anyone. Its condition is simply `true`, so it never checks whose row it is.",
+      "evidence": [
+        "supabase/migrations/20260302100000_tables.sql:44"
+      ],
+      "id": "supabase.rls.permissive_write.public.assignments.signed-in-users-can-update-assignments",
+      "related_gaps": [],
+      "remedy": "Replace `true` with a condition on the row's owner, for example `auth.uid() = user_id`, or remove the policy if nobody should do this.",
+      "severity": "high",
+      "subject": {
+        "policy": "Signed-in users can update assignments",
+        "table": "public.assignments"
+      },
+      "title": "Policy \"Signed-in users can update assignments\" lets any signed-in user change rows in `public.assignments`"
+    },
+    {
+      "category": "security",
+      "check": "supabase.rls.permissive_write",
+      "detail": "The policy \"Anyone can do anything with comments\" on `public.comments` allows every operation for anyone, without signing in. Its condition is simply `true`, so it never checks whose row it is.",
+      "evidence": [
+        "supabase/migrations/20260302100000_tables.sql:33"
+      ],
+      "id": "supabase.rls.permissive_write.public.comments.anyone-can-do-anything-with-comments",
+      "related_gaps": [],
+      "remedy": "Replace `true` with a condition on the row's owner, for example `auth.uid() = user_id`, or remove the policy if nobody should do this.",
+      "severity": "high",
+      "subject": {
+        "policy": "Anyone can do anything with comments",
+        "table": "public.comments"
+      },
+      "title": "Policy \"Anyone can do anything with comments\" lets anyone change rows in `public.comments`"
+    },
+    {
+      "category": "security",
+      "check": "supabase.rls.permissive_write",
+      "detail": "The policy \"Anyone can delete drafts\" on `public.drafts` allows DELETE for anyone, without signing in. Its condition is simply `true`, so it never checks whose row it is.",
+      "evidence": [
+        "supabase/migrations/20260302100000_tables.sql:70"
+      ],
+      "id": "supabase.rls.permissive_write.public.drafts.anyone-can-delete-drafts",
+      "related_gaps": [],
+      "remedy": "Replace `true` with a condition on the row's owner, for example `auth.uid() = user_id`, or remove the policy if nobody should do this.",
+      "severity": "high",
+      "subject": {
+        "policy": "Anyone can delete drafts",
+        "table": "public.drafts"
+      },
+      "title": "Policy \"Anyone can delete drafts\" lets anyone change rows in `public.drafts`"
+    },
+    {
+      "category": "security",
+      "check": "supabase.rls.permissive_write",
+      "detail": "The policy \"Anyone signed in can delete invoices\" on `public.invoices` allows DELETE for any signed-in user. If sign-up is open, that is anyone. Its condition is simply `true`, so it never checks whose row it is.",
+      "evidence": [
+        "supabase/migrations/20260302100000_tables.sql:58"
+      ],
+      "id": "supabase.rls.permissive_write.public.invoices.anyone-signed-in-can-delete-invoices",
+      "related_gaps": [],
+      "remedy": "Replace `true` with a condition on the row's owner, for example `auth.uid() = user_id`, or remove the policy if nobody should do this.",
+      "severity": "high",
+      "subject": {
+        "policy": "Anyone signed in can delete invoices",
+        "table": "public.invoices"
+      },
+      "title": "Policy \"Anyone signed in can delete invoices\" lets any signed-in user change rows in `public.invoices`"
+    },
+    {
+      "category": "security",
+      "check": "supabase.rls.permissive_write",
+      "detail": "The policy \"Members can update projects\" on `public.projects` allows UPDATE for any signed-in user. If sign-up is open, that is anyone. Its condition is simply `true`, so it never checks whose row it is.",
+      "evidence": [
+        "supabase/migrations/20260302100000_tables.sql:85"
+      ],
+      "id": "supabase.rls.permissive_write.public.projects.members-can-update-projects",
+      "related_gaps": [],
+      "remedy": "Replace `true` with a condition on the row's owner, for example `auth.uid() = user_id`, or remove the policy if nobody should do this.",
+      "severity": "high",
+      "subject": {
+        "policy": "Members can update projects",
+        "table": "public.projects"
+      },
+      "title": "Policy \"Members can update projects\" lets any signed-in user change rows in `public.projects`"
+    },
+    {
+      "category": "security",
+      "check": "supabase.rls.permissive_write",
+      "detail": "The policy \"Anyone can join the waitlist\" on `public.waitlist` allows INSERT for anyone, without signing in. Its condition is simply `true`, so it never checks whose row it is.",
+      "evidence": [
+        "supabase/migrations/20260302100000_tables.sql:94"
+      ],
+      "id": "supabase.rls.permissive_write.public.waitlist.anyone-can-join-the-waitlist",
+      "related_gaps": [],
+      "remedy": "Replace `true` with a condition on the row's owner, for example `auth.uid() = user_id`, or remove the policy if nobody should do this.",
+      "severity": "medium",
+      "subject": {
+        "policy": "Anyone can join the waitlist",
+        "table": "public.waitlist"
+      },
+      "title": "Policy \"Anyone can join the waitlist\" lets anyone add rows in `public.waitlist`"
+    }
+  ],
+  "not_visible": [
+    {
+      "how": "Review them in the platform's project settings before relying on this report.",
+      "topic": "Settings made in the platform's dashboard",
+      "why": "Environment variables, secrets and domains configured outside the repository."
+    },
+    {
+      "how": "Run a history-wide secret scanner, for example gitleaks or trufflehog.",
+      "topic": "Git history",
+      "why": "This audit reads the files as they are now. A secret removed in a later commit is still in the history."
+    },
+    {
+      "how": "List them, and remove anyone who no longer needs access.",
+      "topic": "Who has access",
+      "why": "Members of the platform account, collaborators on the repository, and anyone with database dashboard access."
+    },
+    {
+      "how": "Check the database provider's backup settings and do one test restore.",
+      "topic": "Backups",
+      "why": "Whether the database is backed up, and whether a restore has ever been tested."
+    },
+    {
+      "how": "Run the Security Advisor in the Supabase dashboard and fix what it reports.",
+      "topic": "Row-level security changed in the Supabase dashboard",
+      "why": "Policies and RLS settings created in the dashboard never appear in `supabase/migrations/`, so the RLS checks cannot see them."
+    },
+    {
+      "how": "Review Authentication settings in the Supabase dashboard. Open sign-up makes every `authenticated` policy effectively public.",
+      "topic": "Supabase auth settings",
+      "why": "Whether anyone can sign up, whether email confirmation is required, and which redirect URLs are allowed."
+    },
+    {
+      "how": "Review Storage policies in the Supabase dashboard.",
+      "topic": "Storage bucket policies",
+      "why": "Which buckets are public and who can upload."
+    }
+  ],
+  "schema": "offramp.audit/1",
+  "summary": {
+    "checks": {
+      "clean": 4,
+      "could_not_assess": 0,
+      "found": 2,
+      "not_applicable": 1
+    },
+    "findings": {
+      "critical": 3,
+      "high": 5,
+      "low": 0,
+      "medium": 1
+    }
+  }
+}
