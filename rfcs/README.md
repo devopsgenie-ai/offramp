@@ -95,5 +95,5 @@ Every RFC begins with YAML frontmatter. `scripts/check_rfcs.py` validates it.
 | RFC | Title | Status |
 |---|---|---|
 | [0001](0001-architecture.md) | Architecture: detectors, AppSpec, plan and apply, renderers, gaps | accepted |
-| [0002](0002-audit-first.md) | Audit first: a read-only readiness report before any renderer | draft |
-| [0003](0003-fix-generation.md) | Fix generation: a migration renderer for row-level-security findings | draft |
+| [0002](0002-audit-first.md) | Audit first: a read-only readiness report before any renderer | implemented |
+| [0003](0003-fix-generation.md) | Fix generation: a migration renderer for row-level-security findings | accepted |
