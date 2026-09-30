@@ -63,3 +63,38 @@ def test_the_assertion_guard_rejects_truth_that_asserts_nothing_about_a_service(
 def test_the_assertion_guard_accepts_the_shipped_truth():
     truth = yaml.safe_load((FIXTURE / "truth.yaml").read_text())
     assert assertion_guard(truth, scan_repo(FIXTURE).appspec) == []
+
+
+LOVABLE = Path("fixtures/lovable-vite-supabase")
+
+
+def _with_truth(tmp_path, edit):
+    clone = tmp_path / "f"
+    shutil.copytree(LOVABLE, clone)
+    truth = yaml.safe_load((clone / "truth.yaml").read_text())
+    edit(truth)
+    (clone / "truth.yaml").write_text(yaml.safe_dump(truth))
+    return check_fixture(clone)
+
+
+def test_a_guessed_owner_fails_ground_truth(tmp_path):
+    """RFC-0003, Testing: a detector that starts guessing owners from names fails
+    here even as the gap count falls."""
+    def edit(truth):
+        truth["write_scope"]["public.notes"] = "id"
+    problems = _with_truth(tmp_path, edit)
+    assert any("public.notes" in problem and "undetermined" in problem
+               for problem in problems)
+
+
+def test_an_unasserted_owner_table_fails_the_guard(tmp_path):
+    def edit(truth):
+        del truth["write_scope"]["public.tasks"]
+    problems = _with_truth(tmp_path, edit)
+    assert any("public.tasks" in problem and "asserts nothing" in problem
+               for problem in problems)
+
+
+def test_a_missing_write_scope_key_fails_the_guard(tmp_path):
+    problems = _with_truth(tmp_path, lambda truth: truth.pop("write_scope"))
+    assert any("does not assert write_scope" in problem for problem in problems)

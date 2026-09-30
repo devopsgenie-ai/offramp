@@ -29,7 +29,8 @@
             "evidence": "supabase/migrations/20260110093000_init.sql:52",
             "name": "private.audit_log",
             "policies": [],
-            "rls": false
+            "rls": false,
+            "write_scope": null
           },
           {
             "columns": [
@@ -51,7 +52,8 @@
             "evidence": "supabase/migrations/20260110093000_init.sql:45",
             "name": "public.notes",
             "policies": [],
-            "rls": false
+            "rls": false,
+            "write_scope": null
           },
           {
             "columns": [
@@ -93,7 +95,14 @@
                 "with_check": null
               }
             ],
-            "rls": true
+            "rls": true,
+            "write_scope": {
+              "basis": [
+                "policy \"Customers see their orders\" compares it to auth.uid() (supabase/migrations/20260115110000_orders_rls.sql:3)"
+              ],
+              "column": "customer_id",
+              "kind": "owner"
+            }
           },
           {
             "columns": [
@@ -147,7 +156,15 @@
                 "with_check": null
               }
             ],
-            "rls": true
+            "rls": true,
+            "write_scope": {
+              "basis": [
+                "policy \"Users can update their own profile\" compares it to auth.uid() (supabase/migrations/20260110093000_init.sql:14)",
+                "it references auth.users.id"
+              ],
+              "column": "id",
+              "kind": "owner"
+            }
           },
           {
             "columns": [
@@ -208,7 +225,14 @@
                 "with_check": null
               }
             ],
-            "rls": true
+            "rls": true,
+            "write_scope": {
+              "basis": [
+                "policy \"Owners can view their tasks\" compares it to auth.uid() (supabase/migrations/20260110093000_init.sql:28)"
+              ],
+              "column": "owner_id",
+              "kind": "owner"
+            }
           }
         ],
         "unordered": [],

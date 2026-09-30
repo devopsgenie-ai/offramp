@@ -22,6 +22,7 @@ ENV_BINDINGS = ("runtime", "build_arg")
 DATASTORE_MODES = ("in_cluster", "managed", "external")
 PROBE_ROLES = ("liveness", "readiness", "startup")
 PROBE_KINDS = ("http", "tcp")
+WRITE_SCOPE_KINDS = ("owner", "server_only")
 SERVICE_ROLES = ("web", "api", "worker", "cron")
 
 #: Report order. Blocking first, because a blocking gap means the output will not work.
@@ -131,6 +132,19 @@ class Policy:
 
 
 @dataclass
+class WriteScope:
+    """Who may change a table's rows. RFC-0003. Answerable.
+
+    `basis` goes beyond the RFC's sketch: the renderer's comment has to say *why* a
+    column is the owner, and a renderer may not re-derive it from the repository.
+    """
+
+    kind: str                  # owner | server_only
+    column: str | None         # required for owner; names one of the table's columns
+    basis: list[str] = field(default_factory=list)   # the evidence, in words
+
+
+@dataclass
 class Table:
     name: str                  # "public.tasks". Identity; never answerable
     rls: bool | None           # None: altered in these migrations, created elsewhere
@@ -140,6 +154,7 @@ class Table:
     #: not cost the RLS checks their answer.
     columns: list[Column] | None
     policies: list[Policy]     # sorted by name
+    write_scope: WriteScope | None = None   # answerable. None = not determined
 
 
 @dataclass
@@ -288,4 +303,13 @@ def check_enums(appspec: AppSpec, gaps: list[Gap]) -> list[str]:
     for datastore in appspec.datastores:
         if datastore.mode is not None and datastore.mode not in DATASTORE_MODES:
             problems.append(f"datastore {datastore.name}: mode={datastore.mode!r}")
+        for table in (datastore.schema.tables or []) if datastore.schema else []:
+            scope = table.write_scope
+            if scope is None:
+                continue
+            if scope.kind not in WRITE_SCOPE_KINDS:
+                problems.append(f"table {table.name}: write_scope.kind={scope.kind!r}")
+            names = {column.name for column in table.columns or []}
+            if scope.kind == "owner" and scope.column not in names:
+                problems.append(f"table {table.name}: owner {scope.column!r} is not a column")
     return problems

@@ -1,6 +1,6 @@
-# Gaps — task-board
+# Gaps — team-journal
 
-blocking: 6  important: 3  cosmetic: 2  (total 11)
+blocking: 9  important: 3  cosmetic: 0  (total 12)
 
 1 of these are actions rather than values: there is nothing to record, you do the thing and confirm it.
 
@@ -12,15 +12,60 @@ Does the Supabase database stay where it is? The client points at a hosted Supab
 
 - proposed: `external`
 - confidence: medium
-- evidence: `src/integrations/supabase/client.ts:2`
+- evidence: `src/integrations/supabase/client.ts:1`
 
-### datastore.supabase.table.public.notes.write_scope
+### datastore.supabase.table.public.assignments.write_scope
 
-Who may change rows in `public.notes`? No column is proven to identify a row's owner. No policy can be written without guessing. Answer with the owner column, or `server_only` if only your server should write.
+Who may change rows in `public.assignments`? More than one column could be the owner, and nothing says which: `assignee_id` (it references auth.users.id); `created_by` (it references auth.users.id). `created_by` is proposed from its name alone, which is not evidence. No policy can be written without guessing. Answer with the owner column, or `server_only` if only your server should write.
+
+- proposed:
+
+  ```json
+  {
+    "column": "created_by",
+    "kind": "owner"
+  }
+  ```
+- confidence: medium
+- evidence: `supabase/migrations/20260302100000_tables.sql:37`, `supabase/migrations/20260302100000_tables.sql:44`
+
+### datastore.supabase.table.public.drafts.write_scope
+
+Who may change rows in `public.drafts`? The policy that would prove the owner was written before a column it names was renamed, so the migrations no longer say which column it means: policy "Authors can read their drafts" names `author` (supabase/migrations/20260302100000_tables.sql:68). `author_id` is proposed from its name alone, which is not evidence. No policy can be written without guessing. Answer with the owner column, or `server_only` if only your server should write.
+
+- proposed:
+
+  ```json
+  {
+    "column": "author_id",
+    "kind": "owner"
+  }
+  ```
+- confidence: medium
+- evidence: `supabase/migrations/20260302100000_tables.sql:62`, `supabase/migrations/20260302100000_tables.sql:68`, `supabase/migrations/20260302100000_tables.sql:70`
+
+### datastore.supabase.table.public.invoices.write_scope
+
+Who may change rows in `public.invoices`? More than one column could be the owner, and nothing says which: `customer_id` (policy "Customers can view their invoices" compares it to auth.uid() (supabase/migrations/20260302100000_tables.sql:56)); `issuer_id` (it references auth.users.id). No policy can be written without guessing. Answer with the owner column, or `server_only` if only your server should write.
 
 - proposed: none — this one has no sensible default
 - confidence: low
-- evidence: `supabase/migrations/20260110093000_init.sql:45`
+- evidence: `supabase/migrations/20260302100000_tables.sql:49`, `supabase/migrations/20260302100000_tables.sql:56`, `supabase/migrations/20260302100000_tables.sql:58`
+
+### datastore.supabase.table.public.notes.write_scope
+
+Who may change rows in `public.notes`? No column is proven to identify a row's owner. `user_id` is proposed from its name alone, which is not evidence. No policy can be written without guessing. Answer with the owner column, or `server_only` if only your server should write.
+
+- proposed:
+
+  ```json
+  {
+    "column": "user_id",
+    "kind": "owner"
+  }
+  ```
+- confidence: medium
+- evidence: `supabase/migrations/20260302100000_tables.sql:19`
 
 ### delivery.gitops_repo_url
 
@@ -74,21 +119,3 @@ Which Node version builds `.`? Neither `engines.node` nor .nvmrc declares one, s
 - proposed: `20`
 - confidence: medium
 - evidence: `package.json`
-
-## cosmetic
-
-### service.web.env.VITE_SUPABASE_PROJECT_ID
-
-`VITE_SUPABASE_PROJECT_ID` is set in `.env` but no module in `.` reads it. It is probably dead configuration left by the platform. Answer with a value to carry it into the deployment anyway, or say so and it will be dropped.
-
-- proposed: none — this one has no sensible default
-- confidence: medium
-- evidence: `.env:1`
-
-### service.web.env.VITE_SUPABASE_URL
-
-`VITE_SUPABASE_URL` is set in `.env` but no module in `.` reads it. It is probably dead configuration left by the platform. Answer with a value to carry it into the deployment anyway, or say so and it will be dropped.
-
-- proposed: none — this one has no sensible default
-- confidence: medium
-- evidence: `.env:2`

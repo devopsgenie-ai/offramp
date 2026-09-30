@@ -15,8 +15,9 @@ from spec import AppSpec, Gap, gap_id
 
 #: Pointers no plan may ever target. `source` is provenance; a service's name is its
 #: identity and answers key on it, so letting it be answered would orphan every answer
-#: in the user's repository at once.
-NEVER_ANSWERABLE = ("/source", "/services/*/name")
+#: in the user's repository at once. A table's name is identity for the same reason
+#: (RFC-0003).
+NEVER_ANSWERABLE = ("/source", "/services/*/name", "/datastores/*/schema/tables/*/name")
 
 
 def _delivery_gap(field: str, question: str, proposed, severity="blocking") -> Gap:

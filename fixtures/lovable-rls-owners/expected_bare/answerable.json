@@ -5,11 +5,35 @@
     "pointers": [],
     "severity": "blocking"
   },
+  "datastore.supabase.table.public.assignments.write_scope": {
+    "evidence_scope": [],
+    "kind": "value",
+    "pointers": [
+      "/datastores/0/schema/tables/0/write_scope"
+    ],
+    "severity": "blocking"
+  },
+  "datastore.supabase.table.public.drafts.write_scope": {
+    "evidence_scope": [],
+    "kind": "value",
+    "pointers": [
+      "/datastores/0/schema/tables/3/write_scope"
+    ],
+    "severity": "blocking"
+  },
+  "datastore.supabase.table.public.invoices.write_scope": {
+    "evidence_scope": [],
+    "kind": "value",
+    "pointers": [
+      "/datastores/0/schema/tables/4/write_scope"
+    ],
+    "severity": "blocking"
+  },
   "datastore.supabase.table.public.notes.write_scope": {
     "evidence_scope": [],
     "kind": "value",
     "pointers": [
-      "/datastores/0/schema/tables/1/write_scope"
+      "/datastores/0/schema/tables/6/write_scope"
     ],
     "severity": "blocking"
   },
@@ -52,22 +76,6 @@
       "/environments/0/namespace"
     ],
     "severity": "blocking"
-  },
-  "service.web.env.VITE_SUPABASE_PROJECT_ID": {
-    "evidence_scope": [
-      "."
-    ],
-    "kind": "value",
-    "pointers": [],
-    "severity": "cosmetic"
-  },
-  "service.web.env.VITE_SUPABASE_URL": {
-    "evidence_scope": [
-      "."
-    ],
-    "kind": "value",
-    "pointers": [],
-    "severity": "cosmetic"
   },
   "service.web.runtime.version": {
     "evidence_scope": [

@@ -1,0 +1,571 @@
+{
+  "datastores": [
+    {
+      "consumed_by": [
+        "web"
+      ],
+      "env_keys": [],
+      "kind": "postgres",
+      "mode": null,
+      "name": "supabase",
+      "schema": {
+        "latest": "20260305120000",
+        "migrations": [
+          "supabase/migrations/20260301090000_profiles.sql",
+          "supabase/migrations/20260302100000_tables.sql",
+          "supabase/migrations/20260305120000_rename_author.sql"
+        ],
+        "tables": [
+          {
+            "columns": [
+              {
+                "default": "gen_random_uuid()",
+                "name": "id",
+                "nullable": false,
+                "primary_key": true,
+                "references": null
+              },
+              {
+                "default": null,
+                "name": "created_by",
+                "nullable": false,
+                "primary_key": false,
+                "references": "auth.users.id"
+              },
+              {
+                "default": null,
+                "name": "assignee_id",
+                "nullable": true,
+                "primary_key": false,
+                "references": "auth.users.id"
+              },
+              {
+                "default": null,
+                "name": "title",
+                "nullable": false,
+                "primary_key": false,
+                "references": null
+              }
+            ],
+            "evidence": "supabase/migrations/20260302100000_tables.sql:37",
+            "name": "public.assignments",
+            "policies": [
+              {
+                "command": "update",
+                "evidence": "supabase/migrations/20260302100000_tables.sql:44",
+                "name": "Signed-in users can update assignments",
+                "permissive": true,
+                "renamed_since": [],
+                "roles": [
+                  "authenticated"
+                ],
+                "using": "true",
+                "with_check": null
+              }
+            ],
+            "rls": true,
+            "write_scope": null
+          },
+          {
+            "columns": [
+              {
+                "default": null,
+                "name": "id",
+                "nullable": false,
+                "primary_key": true,
+                "references": null
+              },
+              {
+                "default": null,
+                "name": "user_id",
+                "nullable": true,
+                "primary_key": false,
+                "references": "auth.users.id"
+              },
+              {
+                "default": null,
+                "name": "url",
+                "nullable": false,
+                "primary_key": false,
+                "references": null
+              }
+            ],
+            "evidence": "supabase/migrations/20260302100000_tables.sql:12",
+            "name": "public.bookmarks",
+            "policies": [],
+            "rls": false,
+            "write_scope": {
+              "basis": [
+                "it references auth.users.id"
+              ],
+              "column": "user_id",
+              "kind": "owner"
+            }
+          },
+          {
+            "columns": [
+              {
+                "default": "gen_random_uuid()",
+                "name": "id",
+                "nullable": false,
+                "primary_key": true,
+                "references": null
+              },
+              {
+                "default": null,
+                "name": "profile_id",
+                "nullable": false,
+                "primary_key": false,
+                "references": "public.profiles.id"
+              },
+              {
+                "default": null,
+                "name": "body",
+                "nullable": false,
+                "primary_key": false,
+                "references": null
+              }
+            ],
+            "evidence": "supabase/migrations/20260302100000_tables.sql:27",
+            "name": "public.comments",
+            "policies": [
+              {
+                "command": "all",
+                "evidence": "supabase/migrations/20260302100000_tables.sql:33",
+                "name": "Anyone can do anything with comments",
+                "permissive": true,
+                "renamed_since": [],
+                "roles": [
+                  "public"
+                ],
+                "using": "true",
+                "with_check": null
+              }
+            ],
+            "rls": true,
+            "write_scope": {
+              "basis": [
+                "it references public.profiles.id, whose primary key references auth.users.id"
+              ],
+              "column": "profile_id",
+              "kind": "owner"
+            }
+          },
+          {
+            "columns": [
+              {
+                "default": "gen_random_uuid()",
+                "name": "id",
+                "nullable": false,
+                "primary_key": true,
+                "references": null
+              },
+              {
+                "default": null,
+                "name": "author_id",
+                "nullable": false,
+                "primary_key": false,
+                "references": null
+              },
+              {
+                "default": null,
+                "name": "body",
+                "nullable": true,
+                "primary_key": false,
+                "references": null
+              }
+            ],
+            "evidence": "supabase/migrations/20260302100000_tables.sql:62",
+            "name": "public.drafts",
+            "policies": [
+              {
+                "command": "delete",
+                "evidence": "supabase/migrations/20260302100000_tables.sql:70",
+                "name": "Anyone can delete drafts",
+                "permissive": true,
+                "renamed_since": [
+                  "author",
+                  "author_id"
+                ],
+                "roles": [
+                  "public"
+                ],
+                "using": "true",
+                "with_check": null
+              },
+              {
+                "command": "select",
+                "evidence": "supabase/migrations/20260302100000_tables.sql:68",
+                "name": "Authors can read their drafts",
+                "permissive": true,
+                "renamed_since": [
+                  "author",
+                  "author_id"
+                ],
+                "roles": [
+                  "authenticated"
+                ],
+                "using": "auth.uid() = author",
+                "with_check": null
+              }
+            ],
+            "rls": true,
+            "write_scope": null
+          },
+          {
+            "columns": [
+              {
+                "default": "gen_random_uuid()",
+                "name": "id",
+                "nullable": false,
+                "primary_key": true,
+                "references": null
+              },
+              {
+                "default": null,
+                "name": "issuer_id",
+                "nullable": false,
+                "primary_key": false,
+                "references": "auth.users.id"
+              },
+              {
+                "default": null,
+                "name": "customer_id",
+                "nullable": false,
+                "primary_key": false,
+                "references": null
+              },
+              {
+                "default": null,
+                "name": "amount_cents",
+                "nullable": false,
+                "primary_key": false,
+                "references": null
+              }
+            ],
+            "evidence": "supabase/migrations/20260302100000_tables.sql:49",
+            "name": "public.invoices",
+            "policies": [
+              {
+                "command": "delete",
+                "evidence": "supabase/migrations/20260302100000_tables.sql:58",
+                "name": "Anyone signed in can delete invoices",
+                "permissive": true,
+                "renamed_since": [],
+                "roles": [
+                  "authenticated"
+                ],
+                "using": "true",
+                "with_check": null
+              },
+              {
+                "command": "select",
+                "evidence": "supabase/migrations/20260302100000_tables.sql:56",
+                "name": "Customers can view their invoices",
+                "permissive": true,
+                "renamed_since": [],
+                "roles": [
+                  "authenticated"
+                ],
+                "using": "auth.uid() = customer_id",
+                "with_check": null
+              }
+            ],
+            "rls": true,
+            "write_scope": null
+          },
+          {
+            "columns": [
+              {
+                "default": "gen_random_uuid()",
+                "name": "id",
+                "nullable": false,
+                "primary_key": true,
+                "references": null
+              },
+              {
+                "default": "auth.uid()",
+                "name": "user_id",
+                "nullable": false,
+                "primary_key": false,
+                "references": "auth.users.id"
+              },
+              {
+                "default": null,
+                "name": "entry",
+                "nullable": false,
+                "primary_key": false,
+                "references": null
+              }
+            ],
+            "evidence": "supabase/migrations/20260302100000_tables.sql:5",
+            "name": "public.journal",
+            "policies": [],
+            "rls": false,
+            "write_scope": {
+              "basis": [
+                "it references auth.users.id"
+              ],
+              "column": "user_id",
+              "kind": "owner"
+            }
+          },
+          {
+            "columns": [
+              {
+                "default": "gen_random_uuid()",
+                "name": "id",
+                "nullable": false,
+                "primary_key": true,
+                "references": null
+              },
+              {
+                "default": null,
+                "name": "user_id",
+                "nullable": false,
+                "primary_key": false,
+                "references": null
+              },
+              {
+                "default": null,
+                "name": "body",
+                "nullable": false,
+                "primary_key": false,
+                "references": null
+              }
+            ],
+            "evidence": "supabase/migrations/20260302100000_tables.sql:19",
+            "name": "public.notes",
+            "policies": [],
+            "rls": false,
+            "write_scope": null
+          },
+          {
+            "columns": [
+              {
+                "default": null,
+                "name": "id",
+                "nullable": false,
+                "primary_key": true,
+                "references": "auth.users.id"
+              },
+              {
+                "default": null,
+                "name": "display_name",
+                "nullable": true,
+                "primary_key": false,
+                "references": null
+              }
+            ],
+            "evidence": "supabase/migrations/20260301090000_profiles.sql:3",
+            "name": "public.profiles",
+            "policies": [
+              {
+                "command": "select",
+                "evidence": "supabase/migrations/20260301090000_profiles.sql:10",
+                "name": "Users can read their own profile",
+                "permissive": true,
+                "renamed_since": [],
+                "roles": [
+                  "authenticated"
+                ],
+                "using": "auth.uid() = id",
+                "with_check": null
+              },
+              {
+                "command": "update",
+                "evidence": "supabase/migrations/20260301090000_profiles.sql:13",
+                "name": "Users can update their own profile",
+                "permissive": true,
+                "renamed_since": [],
+                "roles": [
+                  "authenticated"
+                ],
+                "using": "auth.uid() = id",
+                "with_check": null
+              }
+            ],
+            "rls": true,
+            "write_scope": {
+              "basis": [
+                "policy \"Users can read their own profile\" compares it to auth.uid() (supabase/migrations/20260301090000_profiles.sql:10)",
+                "policy \"Users can update their own profile\" compares it to auth.uid() (supabase/migrations/20260301090000_profiles.sql:13)",
+                "it references auth.users.id"
+              ],
+              "column": "id",
+              "kind": "owner"
+            }
+          },
+          {
+            "columns": [
+              {
+                "default": "gen_random_uuid()",
+                "name": "id",
+                "nullable": false,
+                "primary_key": true,
+                "references": null
+              },
+              {
+                "default": null,
+                "name": "owner_id",
+                "nullable": false,
+                "primary_key": false,
+                "references": "auth.users.id"
+              },
+              {
+                "default": null,
+                "name": "name",
+                "nullable": false,
+                "primary_key": false,
+                "references": null
+              }
+            ],
+            "evidence": "supabase/migrations/20260302100000_tables.sql:74",
+            "name": "public.projects",
+            "policies": [
+              {
+                "command": "update",
+                "evidence": "supabase/migrations/20260302100000_tables.sql:85",
+                "name": "Members can update projects",
+                "permissive": true,
+                "renamed_since": [],
+                "roles": [
+                  "authenticated"
+                ],
+                "using": "true",
+                "with_check": "true"
+              },
+              {
+                "command": "update",
+                "evidence": "supabase/migrations/20260302100000_tables.sql:82",
+                "name": "Owners can update projects",
+                "permissive": true,
+                "renamed_since": [],
+                "roles": [
+                  "authenticated"
+                ],
+                "using": "(select auth.uid()) = owner_id",
+                "with_check": "(select auth.uid()) = owner_id"
+              },
+              {
+                "command": "select",
+                "evidence": "supabase/migrations/20260302100000_tables.sql:80",
+                "name": "Owners can view projects",
+                "permissive": true,
+                "renamed_since": [],
+                "roles": [
+                  "authenticated"
+                ],
+                "using": "(select auth.uid()) = owner_id",
+                "with_check": null
+              }
+            ],
+            "rls": true,
+            "write_scope": {
+              "basis": [
+                "policy \"Owners can update projects\" compares it to auth.uid() (supabase/migrations/20260302100000_tables.sql:82)",
+                "policy \"Owners can view projects\" compares it to auth.uid() (supabase/migrations/20260302100000_tables.sql:80)",
+                "it references auth.users.id"
+              ],
+              "column": "owner_id",
+              "kind": "owner"
+            }
+          },
+          {
+            "columns": [
+              {
+                "default": null,
+                "name": "id",
+                "nullable": false,
+                "primary_key": true,
+                "references": null
+              },
+              {
+                "default": null,
+                "name": "email",
+                "nullable": false,
+                "primary_key": false,
+                "references": null
+              }
+            ],
+            "evidence": "supabase/migrations/20260302100000_tables.sql:89",
+            "name": "public.waitlist",
+            "policies": [
+              {
+                "command": "insert",
+                "evidence": "supabase/migrations/20260302100000_tables.sql:94",
+                "name": "Anyone can join the waitlist",
+                "permissive": true,
+                "renamed_since": [],
+                "roles": [
+                  "anon"
+                ],
+                "using": null,
+                "with_check": "true"
+              }
+            ],
+            "rls": true,
+            "write_scope": null
+          }
+        ],
+        "unordered": [],
+        "unreplayable": []
+      },
+      "version": null
+    }
+  ],
+  "delivery": {
+    "gitops_repo_url": null,
+    "image_registry": null,
+    "image_tag": null,
+    "ingress_class": null,
+    "target_cluster": "in-cluster"
+  },
+  "environments": [
+    {
+      "name": "production",
+      "namespace": null,
+      "replicas": null,
+      "resources": null
+    }
+  ],
+  "name": "team-journal",
+  "routes": [],
+  "services": [
+    {
+      "build": {
+        "build_cmd": "npm run build",
+        "context": ".",
+        "dockerfile": null,
+        "install_cmd": "npm ci",
+        "output_dir": "dist",
+        "start_cmd": null
+      },
+      "env": [],
+      "name": "web",
+      "ports": [],
+      "probes": [],
+      "replicas": 1,
+      "resources": {
+        "limits": {
+          "cpu": "500m",
+          "memory": "512Mi"
+        },
+        "requests": {
+          "cpu": "100m",
+          "memory": "256Mi"
+        }
+      },
+      "role": "web",
+      "runtime": {
+        "language": "node",
+        "version": null
+      }
+    }
+  ],
+  "source": {
+    "commit": null,
+    "platform": "lovable",
+    "repo_url": "https://github.com/example-org/team-journal.git"
+  }
+}

@@ -3,7 +3,7 @@
     "confidence": "medium",
     "depends_on": [],
     "evidence": [
-      "src/integrations/supabase/client.ts:2"
+      "src/integrations/supabase/client.ts:1"
     ],
     "evidence_scope": [],
     "id": "datastore.supabase.mode",
@@ -15,20 +15,85 @@
     "severity": "blocking"
   },
   {
+    "confidence": "medium",
+    "depends_on": [],
+    "evidence": [
+      "supabase/migrations/20260302100000_tables.sql:37",
+      "supabase/migrations/20260302100000_tables.sql:44"
+    ],
+    "evidence_scope": [],
+    "id": "datastore.supabase.table.public.assignments.write_scope",
+    "kind": "value",
+    "origin": "detector",
+    "pointers": [
+      "/datastores/0/schema/tables/0/write_scope"
+    ],
+    "proposed": {
+      "column": "created_by",
+      "kind": "owner"
+    },
+    "question": "Who may change rows in `public.assignments`? More than one column could be the owner, and nothing says which: `assignee_id` (it references auth.users.id); `created_by` (it references auth.users.id). `created_by` is proposed from its name alone, which is not evidence. No policy can be written without guessing. Answer with the owner column, or `server_only` if only your server should write.",
+    "severity": "blocking"
+  },
+  {
+    "confidence": "medium",
+    "depends_on": [],
+    "evidence": [
+      "supabase/migrations/20260302100000_tables.sql:62",
+      "supabase/migrations/20260302100000_tables.sql:68",
+      "supabase/migrations/20260302100000_tables.sql:70"
+    ],
+    "evidence_scope": [],
+    "id": "datastore.supabase.table.public.drafts.write_scope",
+    "kind": "value",
+    "origin": "detector",
+    "pointers": [
+      "/datastores/0/schema/tables/3/write_scope"
+    ],
+    "proposed": {
+      "column": "author_id",
+      "kind": "owner"
+    },
+    "question": "Who may change rows in `public.drafts`? The policy that would prove the owner was written before a column it names was renamed, so the migrations no longer say which column it means: policy \"Authors can read their drafts\" names `author` (supabase/migrations/20260302100000_tables.sql:68). `author_id` is proposed from its name alone, which is not evidence. No policy can be written without guessing. Answer with the owner column, or `server_only` if only your server should write.",
+    "severity": "blocking"
+  },
+  {
     "confidence": "low",
     "depends_on": [],
     "evidence": [
-      "supabase/migrations/20260110093000_init.sql:45"
+      "supabase/migrations/20260302100000_tables.sql:49",
+      "supabase/migrations/20260302100000_tables.sql:56",
+      "supabase/migrations/20260302100000_tables.sql:58"
+    ],
+    "evidence_scope": [],
+    "id": "datastore.supabase.table.public.invoices.write_scope",
+    "kind": "value",
+    "origin": "detector",
+    "pointers": [
+      "/datastores/0/schema/tables/4/write_scope"
+    ],
+    "proposed": null,
+    "question": "Who may change rows in `public.invoices`? More than one column could be the owner, and nothing says which: `customer_id` (policy \"Customers can view their invoices\" compares it to auth.uid() (supabase/migrations/20260302100000_tables.sql:56)); `issuer_id` (it references auth.users.id). No policy can be written without guessing. Answer with the owner column, or `server_only` if only your server should write.",
+    "severity": "blocking"
+  },
+  {
+    "confidence": "medium",
+    "depends_on": [],
+    "evidence": [
+      "supabase/migrations/20260302100000_tables.sql:19"
     ],
     "evidence_scope": [],
     "id": "datastore.supabase.table.public.notes.write_scope",
     "kind": "value",
     "origin": "detector",
     "pointers": [
-      "/datastores/0/schema/tables/1/write_scope"
+      "/datastores/0/schema/tables/6/write_scope"
     ],
-    "proposed": null,
-    "question": "Who may change rows in `public.notes`? No column is proven to identify a row's owner. No policy can be written without guessing. Answer with the owner column, or `server_only` if only your server should write.",
+    "proposed": {
+      "column": "user_id",
+      "kind": "owner"
+    },
+    "question": "Who may change rows in `public.notes`? No column is proven to identify a row's owner. `user_id` is proposed from its name alone, which is not evidence. No policy can be written without guessing. Answer with the owner column, or `server_only` if only your server should write.",
     "severity": "blocking"
   },
   {
@@ -137,39 +202,5 @@
     "proposed": "20",
     "question": "Which Node version builds `.`? Neither `engines.node` nor .nvmrc declares one, so the build image tag would be a guess.",
     "severity": "important"
-  },
-  {
-    "confidence": "medium",
-    "depends_on": [],
-    "evidence": [
-      ".env:1"
-    ],
-    "evidence_scope": [
-      "."
-    ],
-    "id": "service.web.env.VITE_SUPABASE_PROJECT_ID",
-    "kind": "value",
-    "origin": "detector",
-    "pointers": [],
-    "proposed": null,
-    "question": "`VITE_SUPABASE_PROJECT_ID` is set in `.env` but no module in `.` reads it. It is probably dead configuration left by the platform. Answer with a value to carry it into the deployment anyway, or say so and it will be dropped.",
-    "severity": "cosmetic"
-  },
-  {
-    "confidence": "medium",
-    "depends_on": [],
-    "evidence": [
-      ".env:2"
-    ],
-    "evidence_scope": [
-      "."
-    ],
-    "id": "service.web.env.VITE_SUPABASE_URL",
-    "kind": "value",
-    "origin": "detector",
-    "pointers": [],
-    "proposed": null,
-    "question": "`VITE_SUPABASE_URL` is set in `.env` but no module in `.` reads it. It is probably dead configuration left by the platform. Answer with a value to carry it into the deployment anyway, or say so and it will be dropped.",
-    "severity": "cosmetic"
   }
 ]
