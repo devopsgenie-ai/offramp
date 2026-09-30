@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := help
 PYTHON ?= python3
 
-.PHONY: help check rfc-validate test fixtures
+.PHONY: help check rfc-validate test fixtures fix-behaviour
 
 help: ## Show available targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -17,3 +17,6 @@ test: ## Run the unit and golden tests
 
 fixtures: ## Assert detected facts against each fixture's truth.yaml
 	$(PYTHON) scripts/check_fixtures.py
+
+fix-behaviour: ## Apply generated fixes to a PostgreSQL named by PG* variables (CI job; not in check)
+	$(PYTHON) scripts/check_fix_behaviour.py
