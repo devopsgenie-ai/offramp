@@ -45,6 +45,10 @@ def _gap_id(table: str) -> str:
     ("owner_id = (select auth.uid())", "owner_id"),
     ("tasks.owner_id = auth.uid()", "owner_id"),
     ('auth.uid() = "user_id"', "user_id"),
+    # pg_dump quotes every name and deparses the subselect with an alias.
+    ('"auth"."uid"() = "id"', "id"),
+    ('( select "auth"."uid"() as "uid") = "user_id"', "user_id"),
+    ('"auth"."uid"() = "public"."tasks"."owner_id"', None),
     ("auth.uid() = user_id or is_admin()", None),
     ("auth.uid()::text = user_id", None),
     ("auth.uid() = user_id and done", None),
@@ -70,15 +74,32 @@ def test_policy_basis(tmp_path):
     assert gaps == {}
 
 
-def test_foreign_key_basis(tmp_path):
+def test_foreign_key_basis_needs_the_column_to_default_to_the_writer(tmp_path):
+    """A foreign key proves the column references a user, not that the user writes the
+    row. The corpus precision run found `created_by` and `requested_by` columns the app
+    never sets, and a roles table written only by admins. `default auth.uid()` is the
+    author declaring the column holds whoever writes the row."""
     scopes, _ = _scopes(_migrations(tmp_path, """
         create table journal (id uuid primary key,
-          user_id uuid not null references auth.users(id), entry text);"""))
+          user_id uuid not null default auth.uid() references auth.users(id), entry text);"""))
     assert scopes["public.journal"].column == "user_id"
-    assert scopes["public.journal"].basis == ["it references auth.users.id"]
+    assert scopes["public.journal"].basis == [
+        "it references auth.users.id and defaults to auth.uid()"]
+
+
+def test_a_foreign_key_alone_is_a_proposal_not_an_owner(tmp_path):
+    scopes, gaps = _scopes(_migrations(tmp_path, """
+        create table work_orders (id uuid primary key,
+          requested_by uuid references auth.users(id), title text);"""))
+    assert scopes["public.work_orders"] is None
+    gap = gaps[_gap_id("public.work_orders")]
+    assert gap.proposed == {"kind": "owner", "column": "requested_by"}
+    assert gap.confidence == "medium"
+    assert "`requested_by` references auth.users.id" in gap.question
 
 
 def test_a_primary_key_referencing_auth_users_is_its_own_owner(tmp_path):
+    """The row *is* the user, as in Supabase's `profiles` pattern: no default needed."""
     scopes, _ = _scopes(_migrations(tmp_path, """
         create table profiles (id uuid primary key references auth.users(id), name text);"""))
     assert scopes["public.profiles"].column == "id"
@@ -88,11 +109,12 @@ def test_one_hop_through_a_profiles_style_table(tmp_path):
     scopes, _ = _scopes(_migrations(tmp_path, """
         create table profiles (id uuid primary key references auth.users(id));
         create table comments (id uuid primary key,
-          profile_id uuid not null references profiles(id), body text);"""))
+          profile_id uuid not null default auth.uid() references profiles(id), body text);"""))
     scope = scopes["public.comments"]
     assert scope.column == "profile_id"
     assert scope.basis == [
-        "it references public.profiles.id, whose primary key references auth.users.id"]
+        "it references public.profiles.id, whose primary key references auth.users.id, "
+        "and defaults to auth.uid()"]
 
 
 def test_two_hops_is_not_evidence(tmp_path):
@@ -132,7 +154,8 @@ def test_policy_and_foreign_key_bases_that_disagree_are_a_gap(tmp_path):
 
 def test_policy_and_foreign_key_bases_that_agree_are_both_cited(tmp_path):
     scopes, _ = _scopes(_migrations(tmp_path, """
-        create table notes (id uuid primary key, user_id uuid references auth.users(id));
+        create table notes (id uuid primary key,
+          user_id uuid default auth.uid() references auth.users(id));
         alter table notes enable row level security;
         create policy "mine" on notes for select using ((select auth.uid()) = user_id);"""))
     assert scopes["public.notes"].column == "user_id"

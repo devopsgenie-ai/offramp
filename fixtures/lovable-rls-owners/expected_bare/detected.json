@@ -47,12 +47,12 @@
                 "references": null
               }
             ],
-            "evidence": "supabase/migrations/20260302100000_tables.sql:37",
+            "evidence": "supabase/migrations/20260302100000_tables.sql:48",
             "name": "public.assignments",
             "policies": [
               {
                 "command": "update",
-                "evidence": "supabase/migrations/20260302100000_tables.sql:44",
+                "evidence": "supabase/migrations/20260302100000_tables.sql:55",
                 "name": "Signed-in users can update assignments",
                 "permissive": true,
                 "renamed_since": [],
@@ -90,17 +90,11 @@
                 "references": null
               }
             ],
-            "evidence": "supabase/migrations/20260302100000_tables.sql:12",
+            "evidence": "supabase/migrations/20260302100000_tables.sql:13",
             "name": "public.bookmarks",
             "policies": [],
             "rls": false,
-            "write_scope": {
-              "basis": [
-                "it references auth.users.id"
-              ],
-              "column": "user_id",
-              "kind": "owner"
-            }
+            "write_scope": null
           },
           {
             "columns": [
@@ -112,7 +106,7 @@
                 "references": null
               },
               {
-                "default": null,
+                "default": "auth.uid()",
                 "name": "profile_id",
                 "nullable": false,
                 "primary_key": false,
@@ -126,12 +120,12 @@
                 "references": null
               }
             ],
-            "evidence": "supabase/migrations/20260302100000_tables.sql:27",
+            "evidence": "supabase/migrations/20260302100000_tables.sql:38",
             "name": "public.comments",
             "policies": [
               {
                 "command": "all",
-                "evidence": "supabase/migrations/20260302100000_tables.sql:33",
+                "evidence": "supabase/migrations/20260302100000_tables.sql:44",
                 "name": "Anyone can do anything with comments",
                 "permissive": true,
                 "renamed_since": [],
@@ -145,7 +139,7 @@
             "rls": true,
             "write_scope": {
               "basis": [
-                "it references public.profiles.id, whose primary key references auth.users.id"
+                "it references public.profiles.id, whose primary key references auth.users.id, and defaults to auth.uid()"
               ],
               "column": "profile_id",
               "kind": "owner"
@@ -175,12 +169,12 @@
                 "references": null
               }
             ],
-            "evidence": "supabase/migrations/20260302100000_tables.sql:62",
+            "evidence": "supabase/migrations/20260302100000_tables.sql:73",
             "name": "public.drafts",
             "policies": [
               {
                 "command": "delete",
-                "evidence": "supabase/migrations/20260302100000_tables.sql:70",
+                "evidence": "supabase/migrations/20260302100000_tables.sql:81",
                 "name": "Anyone can delete drafts",
                 "permissive": true,
                 "renamed_since": [
@@ -195,7 +189,7 @@
               },
               {
                 "command": "select",
-                "evidence": "supabase/migrations/20260302100000_tables.sql:68",
+                "evidence": "supabase/migrations/20260302100000_tables.sql:79",
                 "name": "Authors can read their drafts",
                 "permissive": true,
                 "renamed_since": [
@@ -243,12 +237,12 @@
                 "references": null
               }
             ],
-            "evidence": "supabase/migrations/20260302100000_tables.sql:49",
+            "evidence": "supabase/migrations/20260302100000_tables.sql:60",
             "name": "public.invoices",
             "policies": [
               {
                 "command": "delete",
-                "evidence": "supabase/migrations/20260302100000_tables.sql:58",
+                "evidence": "supabase/migrations/20260302100000_tables.sql:69",
                 "name": "Anyone signed in can delete invoices",
                 "permissive": true,
                 "renamed_since": [],
@@ -260,7 +254,7 @@
               },
               {
                 "command": "select",
-                "evidence": "supabase/migrations/20260302100000_tables.sql:56",
+                "evidence": "supabase/migrations/20260302100000_tables.sql:67",
                 "name": "Customers can view their invoices",
                 "permissive": true,
                 "renamed_since": [],
@@ -304,7 +298,7 @@
             "rls": false,
             "write_scope": {
               "basis": [
-                "it references auth.users.id"
+                "it references auth.users.id and defaults to auth.uid()"
               ],
               "column": "user_id",
               "kind": "owner"
@@ -334,7 +328,7 @@
                 "references": null
               }
             ],
-            "evidence": "supabase/migrations/20260302100000_tables.sql:19",
+            "evidence": "supabase/migrations/20260302100000_tables.sql:30",
             "name": "public.notes",
             "policies": [],
             "rls": false,
@@ -390,7 +384,7 @@
               "basis": [
                 "policy \"Users can read their own profile\" compares it to auth.uid() (supabase/migrations/20260301090000_profiles.sql:10)",
                 "policy \"Users can update their own profile\" compares it to auth.uid() (supabase/migrations/20260301090000_profiles.sql:13)",
-                "it references auth.users.id"
+                "it is the primary key and references auth.users.id: the row is the user"
               ],
               "column": "id",
               "kind": "owner"
@@ -420,12 +414,12 @@
                 "references": null
               }
             ],
-            "evidence": "supabase/migrations/20260302100000_tables.sql:74",
+            "evidence": "supabase/migrations/20260302100000_tables.sql:85",
             "name": "public.projects",
             "policies": [
               {
                 "command": "update",
-                "evidence": "supabase/migrations/20260302100000_tables.sql:85",
+                "evidence": "supabase/migrations/20260302100000_tables.sql:96",
                 "name": "Members can update projects",
                 "permissive": true,
                 "renamed_since": [],
@@ -437,7 +431,7 @@
               },
               {
                 "command": "update",
-                "evidence": "supabase/migrations/20260302100000_tables.sql:82",
+                "evidence": "supabase/migrations/20260302100000_tables.sql:93",
                 "name": "Owners can update projects",
                 "permissive": true,
                 "renamed_since": [],
@@ -449,7 +443,7 @@
               },
               {
                 "command": "select",
-                "evidence": "supabase/migrations/20260302100000_tables.sql:80",
+                "evidence": "supabase/migrations/20260302100000_tables.sql:91",
                 "name": "Owners can view projects",
                 "permissive": true,
                 "renamed_since": [],
@@ -463,11 +457,60 @@
             "rls": true,
             "write_scope": {
               "basis": [
-                "policy \"Owners can update projects\" compares it to auth.uid() (supabase/migrations/20260302100000_tables.sql:82)",
-                "policy \"Owners can view projects\" compares it to auth.uid() (supabase/migrations/20260302100000_tables.sql:80)",
+                "policy \"Owners can update projects\" compares it to auth.uid() (supabase/migrations/20260302100000_tables.sql:93)",
+                "policy \"Owners can view projects\" compares it to auth.uid() (supabase/migrations/20260302100000_tables.sql:91)",
                 "it references auth.users.id"
               ],
               "column": "owner_id",
+              "kind": "owner"
+            }
+          },
+          {
+            "columns": [
+              {
+                "default": "gen_random_uuid()",
+                "name": "id",
+                "nullable": false,
+                "primary_key": true,
+                "references": null
+              },
+              {
+                "default": null,
+                "name": "user_id",
+                "nullable": true,
+                "primary_key": false,
+                "references": null
+              },
+              {
+                "default": null,
+                "name": "body",
+                "nullable": false,
+                "primary_key": false,
+                "references": null
+              }
+            ],
+            "evidence": "supabase/migrations/20260302100000_tables.sql:21",
+            "name": "public.reminders",
+            "policies": [
+              {
+                "command": "select",
+                "evidence": "supabase/migrations/20260302100000_tables.sql:26",
+                "name": "Users see their reminders",
+                "permissive": true,
+                "renamed_since": [],
+                "roles": [
+                  "authenticated"
+                ],
+                "using": "auth.uid() = user_id",
+                "with_check": null
+              }
+            ],
+            "rls": false,
+            "write_scope": {
+              "basis": [
+                "policy \"Users see their reminders\" compares it to auth.uid() (supabase/migrations/20260302100000_tables.sql:26)"
+              ],
+              "column": "user_id",
               "kind": "owner"
             }
           },
@@ -488,12 +531,12 @@
                 "references": null
               }
             ],
-            "evidence": "supabase/migrations/20260302100000_tables.sql:89",
+            "evidence": "supabase/migrations/20260302100000_tables.sql:100",
             "name": "public.waitlist",
             "policies": [
               {
                 "command": "insert",
-                "evidence": "supabase/migrations/20260302100000_tables.sql:94",
+                "evidence": "supabase/migrations/20260302100000_tables.sql:105",
                 "name": "Anyone can join the waitlist",
                 "permissive": true,
                 "renamed_since": [],

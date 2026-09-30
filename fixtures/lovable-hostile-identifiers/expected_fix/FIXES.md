@@ -10,7 +10,7 @@
 
 - Closes: Table `public.Journal "Entries"; DROP TABLE public.profiles; --` has no row-level security (`supabase.rls.disabled.public.Journal "Entries"; DROP TABLE public.profiles; --`)
 - Turns row-level security on.
-- The owner of a row is the user in `Owner ID`, because it references auth.users.id.
+- The owner of a row is the user in `Owner ID`, because it references auth.users.id and defaults to auth.uid().
 - Signed-in users can add, change and delete only rows whose `Owner ID` is their own.
 - Reads are unchanged: anyone can still read every row, as today, through "offramp: anyone can read". The audit will now ask whether that is intended.
 
@@ -21,7 +21,7 @@ alter table public.profiles disable row level security; --`
 alter table public.profiles disable row level security; --` (`supabase.rls.permissive_write.public.notes
 alter table public.profiles disable row level security; --.anyone-can-edit-drop-table-public-profiles`)
 - Removes the policy "Anyone can edit"; DROP TABLE public.profiles; /* */ --" (supabase/migrations/20260401090000_odd_names.sql:28). To undo, re-create it from that line.
-- The owner of a row is the user in `user_id`, because it references auth.users.id.
+- The owner of a row is the user in `user_id`, because it references auth.users.id and defaults to auth.uid().
 - Signed-in users can change only rows whose `user_id` is their own.
 - The table has no SELECT policy, so an update from the app finds no rows and silently changes nothing. That was true before this fix too.
 
@@ -29,10 +29,9 @@ alter table public.profiles disable row level security; --.anyone-can-edit-drop-
 
 - Closes: Table `public.order` has no row-level security (`supabase.rls.disabled.public.order`)
 - Turns row-level security on.
-- The owner of a row is the user in `user`, because it references auth.users.id.
+- The owner of a row is the user in `user`, because it references auth.users.id and defaults to auth.uid().
 - Signed-in users can add, change and delete only rows whose `user` is their own.
 - Reads are unchanged: anyone can still read every row, as today, through "offramp: anyone can read". The audit will now ask whether that is intended.
-- `user` has no default of `auth.uid()`, so the app must set it to the signed-in user's id on every insert, or the insert is refused. `alter table public."order" alter column "user" set default auth.uid();` does it for you.
 
 ## Applying it
 

@@ -8,9 +8,17 @@ exactly one column is supported by evidence, and the evidence agrees:
   policy basis        an existing policy on the table compares the column, and nothing
                       else, to `auth.uid()`. The app's author already declared it the
                       owner for some operation.
-  foreign-key basis   the column references `auth.users.id`; or its table's primary key
-                      does (`profiles.id` owns itself); or, one hop, it references a
-                      table whose primary key references `auth.users.id`.
+  the row is the user the table's primary key references `auth.users.id`
+                      (`profiles.id` owns itself, Supabase's own pattern).
+  foreign-key basis   the column references `auth.users.id`, or, one hop, a table whose
+                      primary key does -- *and defaults to `auth.uid()`*. A foreign key
+                      alone proves the column names a user, not that the user writes
+                      the row. The corpus precision run (docs/research/fix-precision.md)
+                      found `created_by`, `requested_by` and a roles table's `user_id`
+                      that the app never sets or that admins write; scoping writes to
+                      them locks the app out. The default is the author declaring the
+                      column holds whoever writes the row. A foreign key without it
+                      is still a candidate: it can contradict, and it is proposed.
 
 Two candidates on either basis, bases that disagree, a policy whose column was renamed
 after it was written, or unknown columns: nothing is detected. A column's *name* is
@@ -95,29 +103,43 @@ def _evidence(table: Table, owned: dict[str, str]):
                 if basis not in by_policy.setdefault(column, []):
                     by_policy[column].append(basis)
     by_key: dict[str, list[str]] = {}
+    proven: set[str] = set(by_policy)
     for column in table.columns:
-        if column.references == "auth.users.id":
-            by_key[column.name] = ["it references auth.users.id"]
-            continue
         target = (column.references or "").rsplit(".", 1)
-        if (len(target) == 2 and target[0] != table.name
+        if column.references == "auth.users.id":
+            if column.primary_key:
+                by_key[column.name] = ["it is the primary key and references auth.users.id: "
+                                       "the row is the user"]
+                proven.add(column.name)
+                continue
+            basis = "it references auth.users.id"
+        elif (len(target) == 2 and target[0] != table.name
                 and owned.get(target[0]) == target[1]):
-            by_key[column.name] = [f"it references {column.references}, whose primary key "
-                                   f"references auth.users.id"]
+            basis = (f"it references {column.references}, whose primary key references "
+                     f"auth.users.id")
+        else:
+            continue
+        if column.default == "auth.uid()":
+            basis += (", and" if "whose" in basis else " and") + " defaults to auth.uid()"
+            proven.add(column.name)
+        by_key[column.name] = [basis]
     candidates = {name: by_policy.get(name, []) + by_key.get(name, [])
                   for name in sorted(set(by_policy) | set(by_key))}
     if stale or len(by_policy) > 1 or len(by_key) > 1:
         return None, candidates, stale
     if by_policy and by_key and set(by_policy) != set(by_key):
         return None, candidates, stale
-    if len(candidates) != 1:
+    if len(candidates) != 1 or not set(candidates) <= proven:
         return None, candidates, stale
     (column, basis), = candidates.items()
     return WriteScope(kind="owner", column=column, basis=basis), candidates, stale
 
 
-def proposed_owner(table: Table) -> str | None:
-    """A column whose name alone suggests an owner, when exactly one does."""
+def proposed_owner(table: Table, candidates: dict[str, list[str]] | None = None) -> str | None:
+    """The gap's proposal: the only column that references a user, else the only column
+    whose name suggests an owner. Never rendered until a human accepts it."""
+    if candidates and len(candidates) == 1:
+        return next(iter(candidates))
     named = [column.name for column in table.columns or [] if column.name in OWNER_NAMES]
     return named[0] if len(named) == 1 else None
 
@@ -134,6 +156,12 @@ def _why(table: Table, candidates: dict[str, list[str]], stale: list[str]) -> st
     elif table.columns is None:
         why = ("The migrations change this table's columns in a way the replay does not "
                "follow, so no column can be proven to identify a row's owner.")
+    elif candidates:
+        (name, basis), = candidates.items()
+        why = (f"`{name}` {basis[0].removeprefix('it ')}, but nothing says the user it names "
+               f"is the one who writes the row: no policy compares it to auth.uid(), and it "
+               f"has no `default auth.uid()`. It is proposed, which is not evidence.")
+        return why
     else:
         why = "No column is proven to identify a row's owner."
     if (named := proposed_owner(table)) is not None:
@@ -143,7 +171,7 @@ def _why(table: Table, candidates: dict[str, list[str]], stale: list[str]) -> st
 
 def _gap(table: Table, candidates: dict[str, list[str]], stale: list[str],
          pointer: str) -> Gap:
-    named = proposed_owner(table)
+    named = proposed_owner(table, candidates)
     proposed = {"kind": "owner", "column": named} if named else None
     why = _why(table, candidates, stale)
     evidence = sorted({table.evidence, *(p.evidence for p in table.policies)} - {None})

@@ -1,6 +1,6 @@
 # Gaps — team-journal
 
-blocking: 9  important: 3  cosmetic: 0  (total 12)
+blocking: 10  important: 3  cosmetic: 0  (total 13)
 
 1 of these are actions rather than values: there is nothing to record, you do the thing and confirm it.
 
@@ -27,11 +27,26 @@ Who may change rows in `public.assignments`? More than one column could be the o
   }
   ```
 - confidence: medium
-- evidence: `supabase/migrations/20260302100000_tables.sql:37`, `supabase/migrations/20260302100000_tables.sql:44`
+- evidence: `supabase/migrations/20260302100000_tables.sql:48`, `supabase/migrations/20260302100000_tables.sql:55`
+
+### datastore.supabase.table.public.bookmarks.write_scope
+
+Who may change rows in `public.bookmarks`? `user_id` references auth.users.id, but nothing says the user it names is the one who writes the row: no policy compares it to auth.uid(), and it has no `default auth.uid()`. It is proposed, which is not evidence. No policy can be written without guessing. Answer with the owner column, or `server_only` if only your server should write.
+
+- proposed:
+
+  ```json
+  {
+    "column": "user_id",
+    "kind": "owner"
+  }
+  ```
+- confidence: medium
+- evidence: `supabase/migrations/20260302100000_tables.sql:13`
 
 ### datastore.supabase.table.public.drafts.write_scope
 
-Who may change rows in `public.drafts`? The policy that would prove the owner was written before a column it names was renamed, so the migrations no longer say which column it means: policy "Authors can read their drafts" names `author` (supabase/migrations/20260302100000_tables.sql:68). `author_id` is proposed from its name alone, which is not evidence. No policy can be written without guessing. Answer with the owner column, or `server_only` if only your server should write.
+Who may change rows in `public.drafts`? The policy that would prove the owner was written before a column it names was renamed, so the migrations no longer say which column it means: policy "Authors can read their drafts" names `author` (supabase/migrations/20260302100000_tables.sql:79). `author_id` is proposed from its name alone, which is not evidence. No policy can be written without guessing. Answer with the owner column, or `server_only` if only your server should write.
 
 - proposed:
 
@@ -42,15 +57,15 @@ Who may change rows in `public.drafts`? The policy that would prove the owner wa
   }
   ```
 - confidence: medium
-- evidence: `supabase/migrations/20260302100000_tables.sql:62`, `supabase/migrations/20260302100000_tables.sql:68`, `supabase/migrations/20260302100000_tables.sql:70`
+- evidence: `supabase/migrations/20260302100000_tables.sql:73`, `supabase/migrations/20260302100000_tables.sql:79`, `supabase/migrations/20260302100000_tables.sql:81`
 
 ### datastore.supabase.table.public.invoices.write_scope
 
-Who may change rows in `public.invoices`? More than one column could be the owner, and nothing says which: `customer_id` (policy "Customers can view their invoices" compares it to auth.uid() (supabase/migrations/20260302100000_tables.sql:56)); `issuer_id` (it references auth.users.id). No policy can be written without guessing. Answer with the owner column, or `server_only` if only your server should write.
+Who may change rows in `public.invoices`? More than one column could be the owner, and nothing says which: `customer_id` (policy "Customers can view their invoices" compares it to auth.uid() (supabase/migrations/20260302100000_tables.sql:67)); `issuer_id` (it references auth.users.id). No policy can be written without guessing. Answer with the owner column, or `server_only` if only your server should write.
 
 - proposed: none — this one has no sensible default
 - confidence: low
-- evidence: `supabase/migrations/20260302100000_tables.sql:49`, `supabase/migrations/20260302100000_tables.sql:56`, `supabase/migrations/20260302100000_tables.sql:58`
+- evidence: `supabase/migrations/20260302100000_tables.sql:60`, `supabase/migrations/20260302100000_tables.sql:67`, `supabase/migrations/20260302100000_tables.sql:69`
 
 ### datastore.supabase.table.public.notes.write_scope
 
@@ -65,7 +80,7 @@ Who may change rows in `public.notes`? No column is proven to identify a row's o
   }
   ```
 - confidence: medium
-- evidence: `supabase/migrations/20260302100000_tables.sql:19`
+- evidence: `supabase/migrations/20260302100000_tables.sql:30`
 
 ### delivery.gitops_repo_url
 

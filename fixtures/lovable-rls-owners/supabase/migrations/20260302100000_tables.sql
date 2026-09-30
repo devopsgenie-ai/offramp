@@ -8,12 +8,23 @@ CREATE TABLE public.journal (
   entry TEXT NOT NULL
 );
 
--- RLS never enabled; a nullable owner with no default. Fixed, with both notes.
+-- RLS never enabled; a foreign key to auth.users but no default and no policy. That
+-- proves the column names a user, not that the user writes the row: a gap proposing it.
 CREATE TABLE public.bookmarks (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   user_id UUID REFERENCES auth.users,
   url TEXT NOT NULL
 );
+
+-- RLS never enabled, but a policy was written for it (Advisor lint 0007): the policy
+-- proves the owner. The owner is nullable with no default: fixed, with both notes.
+CREATE TABLE public.reminders (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID,
+  body TEXT NOT NULL
+);
+CREATE POLICY "Users see their reminders" ON public.reminders
+  FOR SELECT TO authenticated USING (auth.uid() = user_id);
 
 -- RLS never enabled, and only a name suggests an owner: a gap proposing user_id.
 CREATE TABLE public.notes (
@@ -22,11 +33,11 @@ CREATE TABLE public.notes (
   body TEXT NOT NULL
 );
 
--- An ALL policy of `true`, on a table owned one hop through profiles(id). The fix
--- replaces the write half and keeps the read half as it was.
+-- An ALL policy of `true`, on a table owned one hop through profiles(id), defaulted to
+-- the writer. The fix replaces the write half and keeps the read half as it was.
 CREATE TABLE public.comments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  profile_id UUID NOT NULL REFERENCES public.profiles(id),
+  profile_id UUID NOT NULL DEFAULT auth.uid() REFERENCES public.profiles(id),
   body TEXT NOT NULL
 );
 ALTER TABLE public.comments ENABLE ROW LEVEL SECURITY;

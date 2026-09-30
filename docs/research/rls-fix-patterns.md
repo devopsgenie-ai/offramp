@@ -153,7 +153,9 @@ What this means for owner detection:
 
 - **The two evidence bases in RFC-0003 cover the common shape.** Two in three apps
   declare a foreign key to `auth.users`, and the policy basis (`auth.uid() = <col>`) is
-  nearly universal among apps that write any owner policy at all.
+  nearly universal among apps that write any owner policy at all. *Later:* the precision
+  run showed that a foreign key alone is not ownership evidence, because attribution
+  columns reference users too. See [fix-precision.md](fix-precision.md).
 - **Names are not evidence, and the corpus shows why.** `assigned_to`, `approved_by`
   and `invited_by` reference `auth.users` exactly as `user_id` does, but they name
   someone other than the owner. 15 tables have two or more such columns. That is the

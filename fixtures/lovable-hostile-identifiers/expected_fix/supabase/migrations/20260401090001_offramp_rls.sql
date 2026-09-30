@@ -4,7 +4,7 @@
 
 -- fixed: supabase.rls.disabled.public.Journal "Entries"; DROP TABLE public.profiles; --
 -- Owner: "Owner ID", because:
---   it references auth.users.id
+--   it references auth.users.id and defaults to auth.uid()
 alter table public."Journal ""Entries""; DROP TABLE public.profiles; --" enable row level security;
 -- only the row's owner can insert
 create policy "offramp: owner can insert" on public."Journal ""Entries""; DROP TABLE public.profiles; --"
@@ -26,7 +26,7 @@ create policy "offramp: anyone can read" on public."Journal ""Entries""; DROP TA
 
 -- fixed: supabase.rls.permissive_write.public.notes\nalter table public.profiles disable row level security; --.anyone-can-edit-drop-table-public-profiles
 -- Owner: user_id, because:
---   it references auth.users.id
+--   it references auth.users.id and defaults to auth.uid()
 drop policy if exists "Anyone can edit""; DROP TABLE public.profiles; /* */ --" on public."notes
 alter table public.profiles disable row level security; --";
 -- only the row's owner can update
@@ -38,7 +38,7 @@ alter table public.profiles disable row level security; --"
 
 -- fixed: supabase.rls.disabled.public.order
 -- Owner: "user", because:
---   it references auth.users.id
+--   it references auth.users.id and defaults to auth.uid()
 alter table public."order" enable row level security;
 -- only the row's owner can insert
 create policy "offramp: owner can insert" on public."order"

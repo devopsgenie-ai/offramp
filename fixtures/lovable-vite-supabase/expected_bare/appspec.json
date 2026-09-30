@@ -160,7 +160,7 @@
             "write_scope": {
               "basis": [
                 "policy \"Users can update their own profile\" compares it to auth.uid() (supabase/migrations/20260110093000_init.sql:14)",
-                "it references auth.users.id"
+                "it is the primary key and references auth.users.id: the row is the user"
               ],
               "column": "id",
               "kind": "owner"

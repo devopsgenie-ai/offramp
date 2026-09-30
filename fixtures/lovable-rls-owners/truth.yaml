@@ -22,8 +22,9 @@ committed_credentials: []
 write_scope:
   public.profiles: id               # its primary key references auth.users; a policy agrees
   public.journal: user_id           # inline references auth.users
-  public.bookmarks: user_id         # references auth.users (bare), nullable
-  public.comments: profile_id       # one hop through profiles(id)
+  public.bookmarks: undetermined     # references auth.users, but no default and no policy
+  public.comments: profile_id       # one hop through profiles(id), default auth.uid()
+  public.reminders: user_id         # a policy on a table whose RLS was never enabled
   public.projects: owner_id         # policy and foreign key agree
   public.notes: undetermined        # a name alone
   public.assignments: undetermined  # two foreign keys to auth.users
@@ -34,6 +35,7 @@ findings:
   - supabase.rls.disabled.public.journal
   - supabase.rls.disabled.public.bookmarks
   - supabase.rls.disabled.public.notes
+  - supabase.rls.disabled.public.reminders
   - supabase.rls.permissive_write.public.comments.anyone-can-do-anything-with-comments
   - supabase.rls.permissive_write.public.assignments.signed-in-users-can-update-assignments
   - supabase.rls.permissive_write.public.invoices.anyone-signed-in-can-delete-invoices
