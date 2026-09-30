@@ -96,9 +96,10 @@ class Table:
     policies: dict[str, Policy] = field(default_factory=dict)
     #: In declaration order. None: created elsewhere, or a change was not understood.
     columns: dict[str, Column] | None = None
-    #: Constraint name -> the column it makes a foreign key, or None for any other
-    #: kind. Dropping a constraint this does not know makes the columns unknown.
-    constraints: dict[str, str | None] = field(default_factory=dict)
+    #: Constraint name, as PostgreSQL names it -> (kind, columns): "fkey" and its one
+    #: column, "pkey" and its columns, or "other". Dropping one undoes what it made;
+    #: dropping a constraint this does not know may make the columns unknown.
+    constraints: dict[str, tuple[str, list[str]]] = field(default_factory=dict)
 
 
 @dataclass
@@ -364,41 +365,50 @@ def _apply_do(state: _State, original: str, where: str, line: int) -> str | None
     body = original[tag.end():close if close != -1 else len(original)]
     lowered_body = body.lower()
     if not _DO_TOUCHES.search(lowered_body):
+        _do_columns(state, body)
         return None
     if _DYNAMIC.search(re.sub(r"'(?:[^']|'')*'", "''", lowered_body)):
         return "do block with dynamic SQL touching tables or RLS"
     path = where.rsplit(":", 1)[0]
     first_line = line + original[:tag.end()].count("\n")
     for inner_original, inner_masked, inner_line in split_statements(body):
-        statement = re.sub(r"\s+", " ", inner_masked).strip()
+        statement = _unguard(re.sub(r"\s+", " ", inner_masked).strip())
+        if statement is None:
+            return "do block not understood"
         inner_start = inner_line
-        while True:
-            lowered = statement.lower()
-            if lowered.startswith("begin "):
-                statement = statement[len("begin "):].strip()
-                continue
-            guard = _GUARD.match(lowered)
-            if guard is None:
-                break
-            group = _balanced(statement, guard.end())
-            if group is None:
-                return "do block not understood"
-            rest = statement[group[1]:].strip()
-            if not rest.lower().startswith("then"):
-                return "do block not understood"
-            statement = rest[len("then"):].strip()
         lowered = statement.lower()
         if not statement or _NOISE.match(lowered):
             continue
         if lowered.startswith("if ") or lowered.startswith("do "):
             if _DO_TOUCHES.search(lowered):
                 return "do block with a condition that is not an existence check"
+            _forget_columns(state, statement)
             continue
         at = first_line + inner_start - 1 + _line_offset(inner_original, statement)
         reason = _apply(state, statement, statement, f"{path}:{at}", at)
         if reason:
             return reason
     return None
+
+
+def _unguard(statement: str) -> str | None:
+    """`statement` without its leading BEGIN and existence guards. None when a guard is
+    not understood."""
+    while True:
+        lowered = statement.lower()
+        if lowered.startswith("begin "):
+            statement = statement[len("begin "):].strip()
+            continue
+        guard = _GUARD.match(lowered)
+        if guard is None:
+            return statement
+        group = _balanced(statement, guard.end())
+        if group is None:
+            return None
+        rest = statement[group[1]:].strip()
+        if not rest.lower().startswith("then"):
+            return None
+        statement = rest[len("then"):].strip()
 
 
 def _line_offset(original: str, statement: str) -> int:
@@ -583,10 +593,19 @@ def _column(state: _State, table: Table, text: str) -> bool:
     if found_default := re.search(r"\bdefault\s+", shallow, re.I):
         end = _CONSTRAINT_END.search(shallow, found_default.end())
         default = _normalise(rest[found_default.end():end.start() if end else len(rest)])
+    named = {}   # kind -> the name an inline `constraint <name>` gave it
+    for found in re.finditer(rf"\bconstraint\s+({_IDENT})\s+(\w+)", shallow, re.I):
+        kind = {"primary": "pkey", "references": "fkey"}.get(found.group(2).lower(), "other")
+        constraint = _unquote(rest[found.start(1):found.end(1)])
+        if kind == "other":
+            table.constraints[constraint] = ("other", [])
+        else:
+            named[kind] = constraint
     references = None
     if re.search(r"\breferences\b", shallow, re.I):
         references = _references(state, rest)
-        table.constraints[_default_name(table, name, "fkey")] = name
+        table.constraints[named.get("fkey") or _default_name(table, name, "fkey")] = (
+            "fkey", [name])
     table.columns[name] = Column(
         name=name,
         nullable=not (primary or re.search(r"\bnot\s+null\b", shallow, re.I)),
@@ -595,7 +614,8 @@ def _column(state: _State, table: Table, text: str) -> bool:
         primary_key=primary,
     )
     if primary:
-        table.constraints[_default_name(table, None, "pkey")] = None
+        table.constraints[named.get("pkey") or _default_name(table, None, "pkey")] = (
+            "pkey", [name])
     return True
 
 
@@ -620,7 +640,7 @@ def _table_constraint(state: _State, table: Table, text: str) -> bool:
         for column in columns:
             table.columns[column].primary_key = True
             table.columns[column].nullable = False
-        table.constraints[name or _default_name(table, None, "pkey")] = None
+        table.constraints[name or _default_name(table, None, "pkey")] = ("pkey", columns)
         return True
     if found := re.match(r"foreign\s+key\s*\(", lowered):
         group = _balanced(text, found.end() - 1)
@@ -629,13 +649,14 @@ def _table_constraint(state: _State, table: Table, text: str) -> bool:
             return False
         if len(columns) == 1:
             table.columns[columns[0]].references = _references(state, text[group[1]:])
-            table.constraints[name or _default_name(table, columns[0], "fkey")] = columns[0]
+            table.constraints[name or _default_name(table, columns[0], "fkey")] = (
+                "fkey", columns)
         elif name:
-            table.constraints[name] = None   # composite: no single owner column
+            table.constraints[name] = ("other", [])   # composite: no single owner column
         return True
     if re.match(r"(?:unique|check|exclude)\b", lowered):
         if name:
-            table.constraints[name] = None
+            table.constraints[name] = ("other", [])
         return True
     return False
 
@@ -678,6 +699,45 @@ def _alter_columns(state: _State, flat: str) -> None:
             return
 
 
+#: The table an ALTER TABLE names, even inside an EXECUTE string. A name built at run
+#: time (`public.%I`, `' || t`) does not match: the lookaheads reject a keyword taken for
+#: the name and a name cut short at a placeholder.
+_ALTER_TARGET = re.compile(
+    rf"\balter\s+table\s+(?:if\s+exists\s+)?(?:only\s+)?(?!(?:if|only)\s){_QNAME}(?=[\s*;']|$)",
+    re.I | re.S)
+
+
+def _do_columns(state: _State, body: str) -> None:
+    """A DO block that touches no access control can still change columns, and the
+    corpus guards column changes that way. Its ALTER TABLE statements are replayed as
+    `_apply_do` replays policies. What cannot be followed -- dynamic SQL, a condition
+    that is not an existence check -- makes the columns of the tables it names unknown."""
+    if not re.search(r"\balter\s+table\b", body, re.I):
+        return
+    if _DYNAMIC.search(re.sub(r"'(?:[^']|'')*'", "''", body.lower())):
+        _forget_columns(state, body)
+        return
+    for _, masked, _ in split_statements(body):
+        statement = _unguard(re.sub(r"\s+", " ", masked).strip())
+        if statement is None or statement.lower().startswith(("if ", "do ")):
+            _forget_columns(state, masked)
+        elif _ALTER_TABLE.match(statement.lower()):
+            _alter_columns(state, statement)
+
+
+def _forget_columns(state: _State, text: str) -> None:
+    """Make unknown the columns of every table an ALTER TABLE in `text` may change: every
+    table, when one of them names its table only at run time."""
+    names = [_qualify(found.group(1)) for found in _ALTER_TARGET.finditer(text)]
+    if len(names) < len(re.findall(r"\balter\s+table\b", text, re.I)):
+        tables = list(state.tables.values())
+    else:
+        tables = [state.tables[name] for name in names if name in state.tables]
+    for table in tables:
+        table.columns = None
+        table.constraints = {}
+
+
 def _alter_action(state: _State, table: Table, action: str) -> bool:
     lowered = action.lower()
     if _HARMLESS_ACTION.match(lowered):
@@ -698,13 +758,18 @@ def _alter_action(state: _State, table: Table, action: str) -> bool:
             # constraint it does not know, perhaps under a name PostgreSQL truncated. So
             # an unknown name is harmless on a table with no recorded foreign key, and
             # so is PostgreSQL's default name for a CHECK, `<table>_<column>_check`,
-            # which the corpus drops constantly to widen enum-like columns. Anything
-            # else might have removed owner evidence, so the columns go unknown.
+            # which the corpus drops constantly to widen enum-like columns. Any other
+            # name ending in `_check` is a name someone chose, and could be anything.
+            # Anything else might have removed owner evidence, so the columns go unknown.
             recorded = any(column.references for column in table.columns.values())
-            return name.endswith("_check") or not recorded
-        column = table.constraints.pop(name)
-        if column in table.columns:
-            table.columns[column].references = None
+            base = re.escape(table.name.split(".", 1)[1])
+            return not recorded or bool(re.fullmatch(rf"{base}_.+_check\d*", name))
+        kind, columns = table.constraints.pop(name)
+        for column in (table.columns[each] for each in columns if each in table.columns):
+            if kind == "fkey":
+                column.references = None
+            elif kind == "pkey":
+                column.primary_key = False
         return True
     if found := re.match(rf"drop\s+(?:column\s+)?(if\s+exists\s+)?({_IDENT})", action, re.I):
         name = _unquote(found.group(2))
@@ -747,8 +812,9 @@ def _rename_column(state: _State, table: Table, old: str, new: str) -> bool:
     table.columns = {(new if name == old else name): column
                      for name, column in table.columns.items()}
     table.columns[new].name = new
-    table.constraints = {name: (new if column == old else column)
-                         for name, column in table.constraints.items()}
+    table.constraints = {
+        name: (kind, [new if column == old else column for column in columns])
+        for name, (kind, columns) in table.constraints.items()}
     for policy in table.policies.values():
         policy.renamed_since.extend(item for item in (old, new)
                                     if item not in policy.renamed_since)

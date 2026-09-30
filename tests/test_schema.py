@@ -169,6 +169,37 @@ def test_dropping_a_check_constraint_by_its_default_name_keeps_columns(tmp_path)
     assert [c.name for c in _table(root, "public.t").columns] == ["id", "status"]
 
 
+@pytest.mark.parametrize("name", ["my_fk", "owner_check", '"Owner FK"'])
+def test_dropping_a_named_inline_foreign_key_clears_the_reference(tmp_path, name):
+    """PostgreSQL names an inline `constraint <name> references ...` by that name, not
+    `<table>_<column>_fkey`. `owner_check` must not pass for a dropped CHECK."""
+    root = _migrations(tmp_path, {"001.sql": f"""
+        create table t (id int, owner_id uuid constraint {name} references auth.users(id));
+        alter table t drop constraint {name};"""})
+    assert _columns(_table(root, "public.t"))["owner_id"].references is None
+
+
+def test_dropping_a_primary_key_clears_primary_key(tmp_path):
+    root = _migrations(tmp_path, {"001.sql": """
+        create table a (id uuid primary key references auth.users(id));
+        alter table a drop constraint a_pkey;
+        create table b (id uuid, constraint b_key primary key (id));
+        alter table b rename column id to user_id;
+        alter table b drop constraint b_key;
+        create table c (id uuid constraint c_key primary key);
+        alter table c drop constraint c_key;"""})
+    for name, column in (("a", "id"), ("b", "user_id"), ("c", "id")):
+        assert _columns(_table(root, f"public.{name}"))[column].primary_key is False, name
+
+
+def test_an_unknown_constraint_named_like_a_check_is_not_assumed_harmless(tmp_path):
+    """Only PostgreSQL's own CHECK name, `<table>_..._check`, is exempt."""
+    root = _migrations(tmp_path, {"001.sql": """
+        create table t (id int, user_id uuid references auth.users(id));
+        alter table t drop constraint if exists owner_check;"""})
+    assert _table(root, "public.t").columns is None
+
+
 def test_a_policy_records_columns_renamed_after_it(tmp_path):
     root = _migrations(tmp_path, {
         "001.sql": "create table d (id int, author uuid);"
@@ -180,6 +211,92 @@ def test_a_policy_records_columns_renamed_after_it(tmp_path):
     policies = {p.name: p for p in _table(root, "public.d").policies}
     assert policies["own"].renamed_since == ["author", "author_id"]
     assert policies["later"].renamed_since == []
+
+
+_INIT = ("create table tasks (id uuid primary key,"
+         " owner_id uuid references auth.users(id), note text);"
+         "alter table tasks enable row level security;"
+         "create policy \"own\" on tasks for select using (auth.uid() = owner_id);"
+         "create table other (id int);")
+
+
+def test_a_guarded_column_change_in_a_do_block_is_replayed(tmp_path):
+    """Lovable guards column changes with DO blocks. The block touches no access
+    control, but skipping it would leave the columns known and wrong."""
+    root = _migrations(tmp_path, {"001.sql": _INIT, "002.sql": """
+        DO $$ BEGIN
+          IF EXISTS (SELECT 1 FROM information_schema.columns
+                     WHERE table_name = 'tasks' AND column_name = 'owner_id') THEN
+            ALTER TABLE public.tasks DROP CONSTRAINT tasks_owner_id_fkey;
+            ALTER TABLE public.tasks RENAME COLUMN owner_id TO assignee_id;
+          END IF;
+        END $$;"""})
+    assert detect_schema(root).unreplayable == []
+    table = _table(root, "public.tasks")
+    columns = _columns(table)
+    assert list(columns) == ["id", "assignee_id", "note"]
+    assert columns["assignee_id"].references is None
+    assert table.policies[0].renamed_since == ["owner_id", "assignee_id"]
+
+
+def test_a_do_block_adding_a_column_unless_it_exists_is_replayed(tmp_path):
+    root = _migrations(tmp_path, {"001.sql": _INIT, "002.sql": """
+        DO $$ BEGIN
+          ALTER TABLE public.other ADD COLUMN user_id uuid DEFAULT auth.uid();
+        EXCEPTION WHEN duplicate_column THEN NULL;
+        END $$;"""})
+    assert _columns(_table(root, "public.other"))["user_id"].default == "auth.uid()"
+
+
+def test_dynamic_sql_changing_a_named_table_makes_its_columns_unknown(tmp_path):
+    root = _migrations(tmp_path, {"001.sql": _INIT, "002.sql": """
+        DO $$ BEGIN
+          EXECUTE 'ALTER TABLE public.tasks RENAME COLUMN owner_id TO assignee_id';
+        END $$;"""})
+    assert detect_schema(root).unreplayable == []
+    assert _table(root, "public.tasks").columns is None
+    assert _table(root, "public.tasks").rls is True
+    assert list(_columns(_table(root, "public.other"))) == ["id"]
+
+
+def test_dynamic_sql_changing_an_unnamed_table_makes_every_table_unknown(tmp_path):
+    root = _migrations(tmp_path, {"001.sql": _INIT, "002.sql": """
+        DO $$ DECLARE t text; BEGIN
+          FOR t IN SELECT tablename FROM pg_tables LOOP
+            EXECUTE format('ALTER TABLE IF EXISTS public.%I DROP COLUMN note', t);
+          END LOOP;
+        END $$;"""})
+    assert detect_schema(root).unreplayable == []
+    assert _table(root, "public.tasks").columns is None
+    assert _table(root, "public.other").columns is None
+
+
+def test_a_column_change_under_a_condition_makes_its_table_unknown(tmp_path):
+    root = _migrations(tmp_path, {"001.sql": _INIT, "002.sql": """
+        DO $$ BEGIN
+          IF (SELECT count(*) FROM public.tasks) = 0 THEN
+            ALTER TABLE public.tasks DROP COLUMN owner_id;
+          END IF;
+        END $$;"""})
+    assert detect_schema(root).unreplayable == []
+    assert _table(root, "public.tasks").columns is None
+    assert list(_columns(_table(root, "public.other"))) == ["id"]
+
+
+def test_a_conditional_column_change_beside_a_policy_makes_its_table_unknown(tmp_path):
+    """The same condition inside a block the replay does follow, for its policy."""
+    root = _migrations(tmp_path, {"001.sql": _INIT, "002.sql": """
+        DO $$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'later') THEN
+            CREATE POLICY "later" ON public.other FOR SELECT USING (true);
+          END IF;
+          IF (SELECT count(*) FROM public.tasks) = 0 THEN
+            ALTER TABLE public.tasks RENAME COLUMN owner_id TO assignee_id;
+          END IF;
+        END $$;"""})
+    assert detect_schema(root).unreplayable == []
+    assert [p.name for p in _table(root, "public.other").policies] == ["later"]
+    assert _table(root, "public.tasks").columns is None
 
 
 def test_renaming_a_table_updates_references_to_it(tmp_path):
