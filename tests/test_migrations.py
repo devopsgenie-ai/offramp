@@ -4,7 +4,7 @@ a form it does not understand makes the result unassessable rather than partial.
 
 from pathlib import Path
 
-from checks.migrations import replay, split_statements
+from detect.migrations import replay, split_statements
 
 
 def _migrations(root: Path, files: dict[str, str]) -> Path:

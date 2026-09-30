@@ -10,6 +10,7 @@
       "kind": "mongodb",
       "mode": null,
       "name": "mongodb",
+      "schema": null,
       "version": null
     }
   ],

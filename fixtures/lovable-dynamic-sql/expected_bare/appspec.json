@@ -8,6 +8,18 @@
       "kind": "postgres",
       "mode": null,
       "name": "supabase",
+      "schema": {
+        "latest": "20260203090000",
+        "migrations": [
+          "supabase/migrations/20260201080000_bookings.sql",
+          "supabase/migrations/20260203090000_per_tenant.sql"
+        ],
+        "tables": null,
+        "unordered": [],
+        "unreplayable": [
+          "supabase/migrations/20260203090000_per_tenant.sql:3: do block with dynamic SQL touching tables or RLS"
+        ]
+      },
       "version": null
     }
   ],
