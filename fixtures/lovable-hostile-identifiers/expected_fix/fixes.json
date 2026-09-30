@@ -1,0 +1,47 @@
+{
+  "app": {
+    "commit": null,
+    "name": "odd-names",
+    "platform": "lovable"
+  },
+  "expected_after": [
+    "supabase.rls.public_read.public.Journal \"Entries\"; DROP TABLE public.profiles; --.offramp-anyone-can-read",
+    "supabase.rls.public_read.public.order.offramp-anyone-can-read"
+  ],
+  "findings": [
+    {
+      "check": "supabase.rls.disabled",
+      "gap": null,
+      "id": "supabase.rls.disabled.public.Journal \"Entries\"; DROP TABLE public.profiles; --",
+      "policy": null,
+      "reason": "",
+      "severity": "critical",
+      "status": "fixed",
+      "table": "public.Journal \"Entries\"; DROP TABLE public.profiles; --"
+    },
+    {
+      "check": "supabase.rls.disabled",
+      "gap": null,
+      "id": "supabase.rls.disabled.public.order",
+      "policy": null,
+      "reason": "",
+      "severity": "critical",
+      "status": "fixed",
+      "table": "public.order"
+    },
+    {
+      "check": "supabase.rls.permissive_write",
+      "gap": null,
+      "id": "supabase.rls.permissive_write.public.notes\nalter table public.profiles disable row level security; --.anyone-can-edit-drop-table-public-profiles",
+      "policy": "Anyone can edit\"; DROP TABLE public.profiles; /* */ --",
+      "reason": "",
+      "severity": "high",
+      "status": "fixed",
+      "table": "public.notes\nalter table public.profiles disable row level security; --"
+    }
+  ],
+  "migration": "supabase/migrations/20260401090001_offramp_rls.sql",
+  "schema": "offramp.fix/1",
+  "statements": 12,
+  "version": "20260401090001"
+}

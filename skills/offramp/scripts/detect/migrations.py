@@ -40,7 +40,8 @@ MIGRATIONS_DIR = Path("supabase") / "migrations"
 _TIMESTAMPED = re.compile(r"^\d+(?:[_-][^/]*)?\.sql$")
 _VERSION = re.compile(r"^(\d+)")
 
-_IDENT = r'(?:"[^"]+"|[a-z_][a-z0-9_$]*)'
+#: A quoted identifier may contain anything, a doubled `""` standing for one quote.
+_IDENT = r'(?:"(?:[^"]|"")+"|[a-z_][a-z0-9_$]*)'
 _QNAME = rf"({_IDENT}(?:\s*\.\s*{_IDENT})?)"
 
 _CREATE_TABLE = re.compile(
@@ -198,8 +199,19 @@ def split_statements(text: str) -> list[tuple[str, str, int]]:
 def _unquote(identifier: str) -> str:
     identifier = identifier.strip()
     if identifier.startswith('"') and identifier.endswith('"'):
-        return identifier[1:-1]
+        return identifier[1:-1].replace('""', '"')
     return identifier.lower()
+
+
+_QUOTED = re.compile(r'("(?:[^"]|"")*")')
+
+
+def _collapse(text: str) -> str:
+    """Runs of whitespace to one space, except inside a quoted identifier, where the
+    whitespace is part of the name."""
+    parts = _QUOTED.split(text)
+    return "".join(part if index % 2 else re.sub(r"\s+", " ", part)
+                   for index, part in enumerate(parts)).strip()
 
 
 def _qualify(qname: str) -> str:
@@ -282,7 +294,7 @@ def _apply(state: _State, original: str, masked: str, where: str, line: int) -> 
     Matching runs on the masked text, case-insensitively: identifiers are identical
     there, and string literals and dollar bodies cannot be mistaken for syntax.
     """
-    flat = re.sub(r"\s+", " ", masked).strip()
+    flat = _collapse(masked)
     lowered = flat.lower()
 
     def match(pattern: re.Pattern) -> "re.Match | None":
@@ -372,7 +384,7 @@ def _apply_do(state: _State, original: str, where: str, line: int) -> str | None
     path = where.rsplit(":", 1)[0]
     first_line = line + original[:tag.end()].count("\n")
     for inner_original, inner_masked, inner_line in split_statements(body):
-        statement = _unguard(re.sub(r"\s+", " ", inner_masked).strip())
+        statement = _unguard(_collapse(inner_masked))
         if statement is None:
             return "do block not understood"
         inner_start = inner_line
@@ -439,22 +451,28 @@ def migration_files(root: Path) -> list[Path]:
     return [path for path in _sql_files(root) if _TIMESTAMPED.match(path.name)]
 
 
-def replay(root: Path) -> Replay:
+def replay(root: Path, extra: "tuple[tuple[str, str], ...] | list" = ()) -> Replay:
+    """Replay the repository's migrations. `extra` adds (relative path, text) pairs as
+    though they were files in `supabase/migrations/`: the fix renderer's round trip
+    replays its own output this way, in memory, before writing anything."""
     state = _State()
     unparseable: list[str] = []
-    files = migration_files(root)
-    for path in files:
-        relative = rel(root, path)
-        text = path.read_text(encoding="utf-8", errors="ignore")
+    texts = {rel(root, path): path for path in migration_files(root)}
+    texts.update(dict(extra))
+    files = sorted(texts, key=lambda relative: relative.rsplit("/", 1)[-1])
+    for relative in files:
+        source = texts[relative]
+        text = (source.read_text(encoding="utf-8", errors="ignore")
+                if isinstance(source, Path) else source)
         for original, masked, line in split_statements(text):
             reason = _apply(state, original, masked, f"{relative}:{line}", line)
             if reason:
                 unparseable.append(f"{relative}:{line}: {reason}")
     untimestamped = [rel(root, path) for path in _sql_files(root)
                      if not _TIMESTAMPED.match(path.name)]
-    return Replay(files=[rel(root, path) for path in files], tables=state.tables,
+    return Replay(files=files, tables=state.tables,
                   unparseable=unparseable, untimestamped=untimestamped,
-                  latest=_latest(path.name for path in files))
+                  latest=_latest(relative.rsplit("/", 1)[-1] for relative in files))
 
 
 def _latest(names) -> str | None:
@@ -464,11 +482,11 @@ def _latest(names) -> str | None:
     return max(versions, key=lambda version: (int(version), version)) if versions else None
 
 
-def detect_schema(root: Path) -> Schema | None:
+def detect_schema(root: Path, extra=()) -> Schema | None:
     """`Datastore.schema`. None when the repository has no migration files at all."""
-    if not _sql_files(root):
+    if not (_sql_files(root) or extra):
         return None
-    result = replay(root)
+    result = replay(root, extra)
     tables = None
     if not (result.unparseable or result.untimestamped):
         tables = [_schema_table(table) for _, table in sorted(result.tables.items())]
@@ -718,7 +736,7 @@ def _do_columns(state: _State, body: str) -> None:
         _forget_columns(state, body)
         return
     for _, masked, _ in split_statements(body):
-        statement = _unguard(re.sub(r"\s+", " ", masked).strip())
+        statement = _unguard(_collapse(masked))
         if statement is None or statement.lower().startswith(("if ", "do ")):
             _forget_columns(state, masked)
         elif _ALTER_TABLE.match(statement.lower()):

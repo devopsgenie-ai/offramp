@@ -41,8 +41,7 @@ def detect_write_scopes(schema: Schema | None, pointer: str) -> tuple[Schema | N
     e.g. `/datastores/0/schema`."""
     if schema is None or schema.tables is None:
         return schema, []
-    owned = {table.name: key for table in schema.tables
-             if (key := _key_referencing_users(table)) is not None}
+    owned = _owned(schema)
     tables: list[Table] = []
     gaps: list[Gap] = []
     for index, table in enumerate(schema.tables):
@@ -54,6 +53,18 @@ def detect_write_scopes(schema: Schema | None, pointer: str) -> tuple[Schema | N
         if scope is None and leaves_writes_open(table):
             gaps.append(_gap(table, candidates, stale, f"{pointer}/tables/{index}/write_scope"))
     return replace(schema, tables=tables), gaps
+
+
+def undetermined_reason(table: Table, schema: Schema) -> str:
+    """Why no owner was detected for `table`, in the gap's words. The fix renderer
+    repeats it beside the table's inert block, from the AppSpec alone."""
+    _, candidates, stale = _evidence(table, _owned(schema))
+    return _why(table, candidates, stale)
+
+
+def _owned(schema: Schema) -> dict[str, str]:
+    return {table.name: key for table in schema.tables or []
+            if (key := _key_referencing_users(table)) is not None}
 
 
 def _key_referencing_users(table: Table) -> str | None:
@@ -105,10 +116,13 @@ def _evidence(table: Table, owned: dict[str, str]):
     return WriteScope(kind="owner", column=column, basis=basis), candidates, stale
 
 
-def _gap(table: Table, candidates: dict[str, list[str]], stale: list[str],
-         pointer: str) -> Gap:
+def proposed_owner(table: Table) -> str | None:
+    """A column whose name alone suggests an owner, when exactly one does."""
     named = [column.name for column in table.columns or [] if column.name in OWNER_NAMES]
-    proposed = {"kind": "owner", "column": named[0]} if len(named) == 1 else None
+    return named[0] if len(named) == 1 else None
+
+
+def _why(table: Table, candidates: dict[str, list[str]], stale: list[str]) -> str:
     if stale:
         why = ("The policy that would prove the owner was written before a column it names "
                "was renamed, so the migrations no longer say which column it means: "
@@ -122,9 +136,16 @@ def _gap(table: Table, candidates: dict[str, list[str]], stale: list[str],
                "follow, so no column can be proven to identify a row's owner.")
     else:
         why = "No column is proven to identify a row's owner."
-    if proposed:
-        why += (f" `{proposed['column']}` is proposed from its name alone, which is not "
-                f"evidence.")
+    if (named := proposed_owner(table)) is not None:
+        why += f" `{named}` is proposed from its name alone, which is not evidence."
+    return why
+
+
+def _gap(table: Table, candidates: dict[str, list[str]], stale: list[str],
+         pointer: str) -> Gap:
+    named = proposed_owner(table)
+    proposed = {"kind": "owner", "column": named} if named else None
+    why = _why(table, candidates, stale)
     evidence = sorted({table.evidence, *(p.evidence for p in table.policies)} - {None})
     return Gap(
         id=gap_id("datastore", "supabase", "table", table.name, "write_scope"),

@@ -1,0 +1,38 @@
+# Hostile identifiers (RFC-0003, Testing): the names are data, and the rendered file must
+# replay to exactly the intended statements. Every name here is legal PostgreSQL.
+app:
+  name: odd-names
+  platform: lovable
+services:
+  - name: web
+    role: web
+    language: node
+    install_cmd: npm ci
+    dockerfile: null
+    routes: []
+    env: []
+    probes: []
+datastores:
+  - name: supabase
+    kind: postgres
+    consumed_by: [web]
+    env_keys: []
+committed_credentials: []
+
+write_scope:
+  'public.Journal "Entries"; DROP TABLE public.profiles; --': Owner ID
+  public.order: user
+  "public.notes\nalter table public.profiles disable row level security; --": user_id
+
+findings:
+  - 'supabase.rls.disabled.public.Journal "Entries"; DROP TABLE public.profiles; --'
+  - supabase.rls.disabled.public.order
+  - "supabase.rls.permissive_write.public.notes\nalter table public.profiles disable row level security; --.anyone-can-edit-drop-table-public-profiles"
+assessments:
+  credential.committed: clean
+  platform.hardcoded_url: clean
+  frontend.secret_in_bundle: clean
+  service.no_health_endpoint: not_applicable
+  supabase.rls.disabled: found
+  supabase.rls.permissive_write: found
+  supabase.rls.public_read: clean
