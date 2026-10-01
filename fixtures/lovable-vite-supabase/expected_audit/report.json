@@ -53,6 +53,9 @@
       "related_gaps": [],
       "remedy": "Enable row-level security on the table and add policies scoped to the row's owner. Until then, treat the data in it as exposed.",
       "severity": "critical",
+      "subject": {
+        "table": "public.notes"
+      },
       "title": "Table `public.notes` has no row-level security"
     },
     {
@@ -66,6 +69,7 @@
       "related_gaps": [],
       "remedy": "If this is a real credential, revoke it and move the call that needs it behind a server-side function. Rebuilding with a new value does not help: the new value is baked into the new bundle too.",
       "severity": "high",
+      "subject": {},
       "title": "`VITE_OPENAI_API_KEY` looks like a secret, and it is shipped to every browser"
     },
     {
@@ -79,6 +83,10 @@
       "related_gaps": [],
       "remedy": "Replace `true` with a condition on the row's owner, for example `auth.uid() = user_id`, or remove the policy if nobody should do this.",
       "severity": "high",
+      "subject": {
+        "policy": "Authenticated users can update tasks",
+        "table": "public.tasks"
+      },
       "title": "Policy \"Authenticated users can update tasks\" lets any signed-in user change rows in `public.tasks`"
     },
     {
@@ -92,6 +100,7 @@
       "related_gaps": [],
       "remedy": "Call the model provider directly with your own key, from a server-side function.",
       "severity": "medium",
+      "subject": {},
       "title": "AI calls go through Lovable's AI gateway"
     },
     {
@@ -105,6 +114,10 @@
       "related_gaps": [],
       "remedy": "Confirm the table holds nothing private. If it does, restrict the policy, or move the private columns to a table with its own policies.",
       "severity": "medium",
+      "subject": {
+        "policy": "Profiles are viewable by everyone",
+        "table": "public.profiles"
+      },
       "title": "Every row in `public.profiles` is readable without signing in"
     },
     {
@@ -118,6 +131,7 @@
       "related_gaps": [],
       "remedy": "Remove the script tag from `index.html` once you no longer edit in Lovable.",
       "severity": "low",
+      "subject": {},
       "title": "Lovable's editor script loads in production"
     }
   ],

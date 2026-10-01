@@ -1,0 +1,153 @@
+# What users can do before and after the generated fix, on a real PostgreSQL (RFC-0003,
+# Testing). Run by scripts/check_fix_behaviour.py in CI, never by `fix`.
+users:
+  alice: 00000000-0000-4000-8000-00000000000a
+  bob: 00000000-0000-4000-8000-00000000000b
+seed: |
+  insert into public.profiles (id, display_name) values ('{alice}', 'Alice'), ('{bob}', 'Bob');
+  insert into public.journal (user_id, entry) values ('{alice}', 'dear diary');
+  insert into public.bookmarks (user_id, url) values ('{alice}', 'https://a.invalid'), (null, 'https://orphan.invalid');
+  insert into public.reminders (user_id, body) values ('{alice}', 'call'), (null, 'orphan');
+  insert into public.notes (user_id, body) values ('{alice}', 'note');
+  insert into public.comments (profile_id, body) values ('{alice}', 'hello');
+  insert into public.assignments (created_by, assignee_id, title) values ('{alice}', '{bob}', 'task');
+  insert into public.invoices (issuer_id, customer_id, amount_cents) values ('{alice}', '{bob}', 100);
+  insert into public.drafts (author_id, body) values ('{alice}', 'draft');
+  insert into public.projects (owner_id, name) values ('{alice}', 'project');
+checks:
+  # journal: RLS was off. Owner-scoped writes, reads kept.
+  - name: journal is still readable by anyone
+    as: anon
+    sql: select count(*) from public.journal
+    before: 1
+    after: 1
+  - name: anon can no longer delete journal entries
+    as: anon
+    sql: delete from public.journal
+    before: 1
+    after: 0
+  - name: another user can no longer edit a journal entry
+    as: bob
+    sql: update public.journal set entry = 'x'
+    before: 1
+    after: 0
+  - name: the owner can still edit their journal entry
+    as: alice
+    sql: update public.journal set entry = 'x'
+    before: 1
+    after: 1
+  - name: the owner can still add an entry without naming the owner (default auth.uid())
+    as: alice
+    sql: insert into public.journal (entry) values ('new')
+    before: 1
+    after: 1
+  - name: nobody can add an entry in someone else's name
+    as: bob
+    sql: insert into public.journal (entry, user_id) values ('x', '{alice}')
+    before: 1
+    after: error
+  # reminders: RLS was off, but a policy was written for it. The fix turns it on, the
+  # policy proves the owner, and the owner is nullable with no default.
+  - name: reminders are still readable by anyone, the ownerless one included
+    as: anon
+    sql: select count(*) from public.reminders
+    before: 2
+    after: 2
+  - name: the owner can change only their own reminder; the ownerless one is unreachable
+    as: alice
+    sql: update public.reminders set body = 'x'
+    before: 2
+    after: 1
+  - name: another user can no longer change a reminder
+    as: bob
+    sql: update public.reminders set body = 'x'
+    before: 2
+    after: 0
+  - name: an insert that does not set the owner is now refused
+    as: alice
+    sql: insert into public.reminders (body) values ('new')
+    before: 1
+    after: error
+  - name: an insert that sets the owner still works
+    as: alice
+    sql: insert into public.reminders (user_id, body) values ('{alice}', 'new')
+    before: 1
+    after: 1
+  # comments: ALL `true` replaced; its read half kept.
+  - name: comments are still readable by anyone
+    as: anon
+    sql: select count(*) from public.comments
+    before: 1
+    after: 1
+  - name: anon can no longer edit comments
+    as: anon
+    sql: update public.comments set body = 'x'
+    before: 1
+    after: 0
+  - name: another user can no longer edit a comment
+    as: bob
+    sql: update public.comments set body = 'x'
+    before: 1
+    after: 0
+  - name: the owner, one hop through profiles, can still edit their comment
+    as: alice
+    sql: update public.comments set body = 'x'
+    before: 1
+    after: 1
+  - name: anon can no longer post as someone else
+    as: anon
+    sql: insert into public.comments (profile_id, body) values ('{bob}', 'spam')
+    before: 1
+    after: error
+  - name: a signed-in user can still post as themselves
+    as: bob
+    sql: insert into public.comments (profile_id, body) values ('{bob}', 'hi')
+    before: 1
+    after: 1
+  # projects: the owner-scoped UPDATE already existed; only the `true` one is dropped.
+  - name: another user can no longer rename a project
+    as: bob
+    sql: update public.projects set name = 'x'
+    before: 1
+    after: 0
+  - name: the owner can still rename their project
+    as: alice
+    sql: update public.projects set name = 'x'
+    before: 1
+    after: 1
+  # NOT FIXED and deliberately untouched: each behaves exactly as before.
+  - name: assignments stay open (two candidate owners, a gap)
+    as: bob
+    sql: update public.assignments set title = 'x'
+    before: 1
+    after: 1
+  - name: invoices stay open (bases disagree, a gap)
+    as: bob
+    sql: delete from public.invoices
+    before: 1
+    after: 1
+  - name: drafts stay open (renamed column, a gap)
+    as: anon
+    sql: delete from public.drafts
+    before: 1
+    after: 1
+  - name: bookmarks stay open (a foreign key alone, a gap)
+    as: bob
+    sql: update public.bookmarks set url = 'https://x.invalid'
+    before: 2
+    after: 2
+  - name: notes stay open (a name alone, a gap)
+    as: anon
+    sql: update public.notes set body = 'x'
+    before: 1
+    after: 1
+  - name: the waitlist still accepts anonymous sign-ups
+    as: anon
+    sql: insert into public.waitlist (email) values ('someone@example.invalid')
+    before: 1
+    after: 1
+  - name: profiles are untouched
+    as: alice
+    sql: update public.profiles set display_name = 'x'
+    before: 1
+    after: 1

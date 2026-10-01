@@ -127,3 +127,22 @@ def test_restrictive_true_policy_is_not_a_finding(tmp_path):
                                "create policy r on t as restrictive for all using (true);"})
     findings, _ = _by_check(tmp_path)
     assert [f for f in findings if f.check.startswith("supabase.")] == []
+
+
+def test_rls_findings_carry_their_subject():
+    """RFC-0003: the renderer joins a finding to its table and policy by `subject`,
+    never by parsing an id -- ids are built with dns_label, which is lossy."""
+    findings, _ = _by_check(LOVABLE)
+    subjects = {f.id: f.subject for f in findings if f.check.startswith("supabase.")}
+    assert subjects == {
+        "supabase.rls.disabled.public.notes": {"table": "public.notes"},
+        "supabase.rls.permissive_write.public.tasks.authenticated-users-can-update-tasks":
+            {"table": "public.tasks", "policy": "Authenticated users can update tasks"},
+        "supabase.rls.public_read.public.profiles.profiles-are-viewable-by-everyone":
+            {"table": "public.profiles", "policy": "Profiles are viewable by everyone"},
+    }
+
+
+def test_other_findings_have_an_empty_subject():
+    findings, _ = _by_check(LOVABLE)
+    assert {str(f.subject) for f in findings if not f.check.startswith("supabase.")} == {"{}"}

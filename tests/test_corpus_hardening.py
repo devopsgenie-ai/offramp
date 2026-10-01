@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 
 from checks import run_checks
-from checks.migrations import replay
+from detect.migrations import replay
 from scan import scan_repo
 from walk import read_source
 

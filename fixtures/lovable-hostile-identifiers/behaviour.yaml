@@ -1,0 +1,46 @@
+# PostgreSQL, not just the replay, must accept the quoted names, and the policies must
+# land on the right tables (RFC-0003, Testing).
+users:
+  alice: 00000000-0000-4000-8000-00000000000a
+  bob: 00000000-0000-4000-8000-00000000000b
+seed: |
+  insert into public."Journal ""Entries""; DROP TABLE public.profiles; --" ("Owner ID", body) values ('{alice}', 'x');
+  insert into public."order" ("user", total_cents) values ('{alice}', 100);
+  insert into public."notes
+  alter table public.profiles disable row level security; --" (user_id, body) values ('{alice}', 'x');
+checks:
+  - name: another user can no longer edit the oddly named journal
+    as: bob
+    sql: update public."Journal ""Entries""; DROP TABLE public.profiles; --" set body = 'y'
+    before: 1
+    after: 0
+  - name: its owner still can
+    as: alice
+    sql: update public."Journal ""Entries""; DROP TABLE public.profiles; --" set body = 'y'
+    before: 1
+    after: 1
+  - name: its reads are unchanged
+    as: anon
+    sql: select count(*) from public."Journal ""Entries""; DROP TABLE public.profiles; --"
+    before: 1
+    after: 1
+  - name: another user can no longer change an order
+    as: bob
+    sql: update public."order" set total_cents = 0
+    before: 1
+    after: 0
+  - name: the owner of an order still can
+    as: alice
+    sql: update public."order" set total_cents = 0
+    before: 1
+    after: 1
+  - name: another user can no longer edit the table with a newline in its name
+    as: bob
+    sql: "update public.\"notes\nalter table public.profiles disable row level security; --\" set body = 'y'"
+    before: 1
+    after: 0
+  - name: its owner still can
+    as: alice
+    sql: "update public.\"notes\nalter table public.profiles disable row level security; --\" set body = 'y'"
+    before: 1
+    after: 1

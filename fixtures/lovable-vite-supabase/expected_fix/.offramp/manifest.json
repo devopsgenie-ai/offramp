@@ -1,0 +1,10 @@
+{
+  "appspec_sha256": "634fd4486871911db819f6da26817fee8d8859668a6020fec419280174c20462",
+  "files": {
+    "FIXES.md": "4613363894dc3fda217e80ed7b0d4cd1375a4efe5c5e876d6ab43d6ff42c41b4",
+    "fixes.json": "51998f0a8eac1cecd8064c0f53fd21a603d5fd0eec067feb5cd7b16896597da8",
+    "supabase/migrations/20260115110001_offramp_rls.sql": "038ac42180677a9aae4421aa026df983e6865df596907a963653c2bb09679434"
+  },
+  "schema": "offramp.fix/1",
+  "version": "20260115110001"
+}

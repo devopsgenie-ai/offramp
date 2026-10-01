@@ -8,6 +8,7 @@
       "kind": "postgres",
       "mode": null,
       "name": "supabase",
+      "schema": null,
       "version": null
     }
   ],

@@ -22,7 +22,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -31,7 +31,9 @@ from detect.credentials import detect_committed_credentials       # noqa: E402
 from detect.datastores import detect_datastores, tag_datastore_env  # noqa: E402
 from detect.env import detect_env                                 # noqa: E402
 from detect.identity import detect_identity, detect_platform      # noqa: E402
+from detect.migrations import detect_schema                        # noqa: E402
 from detect.node_service import detect_node_service, find_node_services  # noqa: E402
+from detect.owners import detect_write_scopes                     # noqa: E402
 from detect.probes import detect_probes                           # noqa: E402
 from detect.python_service import detect_python_service, find_python_services  # noqa: E402
 from detect.routes import detect_routes                           # noqa: E402
@@ -39,7 +41,7 @@ from detect.supabase import detect_supabase                       # noqa: E402
 from gaps import answerable_set, is_moot, spec_level_gaps         # noqa: E402
 from report import render_gap_report                              # noqa: E402
 from spec import (                                                # noqa: E402
-    SEVERITY_ORDER, AppSpec, Delivery, Environment, Evidence, Gap, Source,
+    SEVERITY_ORDER, AppSpec, Delivery, Environment, Evidence, Gap, Schema, Source,
     canonical_json, check_enums, evidence_text,
 )
 
@@ -55,6 +57,10 @@ class ScanResult:
     appspec: AppSpec
     gaps: list[Gap]
     evidence: list[Evidence]
+    #: The migration replay, whether or not a Supabase datastore was detected. The RLS
+    #: checks read it here: a repository that declares Supabase without importing it has
+    #: no datastore to hang the schema on, and its migrations still deserve an audit.
+    schema: Schema | None = None
 
 
 def scan_repo(root: Path) -> ScanResult:
@@ -92,7 +98,15 @@ def scan_repo(root: Path) -> ScanResult:
 
     datastores, datastore_gaps, datastore_evidence = detect_datastores(root, services)
     supabase, supabase_gaps, supabase_evidence = detect_supabase(root, services)
+    schema = detect_schema(root)
     datastores = sorted(datastores + supabase, key=lambda item: item.name)
+    for index, store in enumerate(datastores):
+        if store.name == "supabase":
+            # Owners are detected only where the schema joins the AppSpec: a gap has to
+            # point at the field an answer would fill.
+            schema, owner_gaps = detect_write_scopes(schema, f"/datastores/{index}/schema")
+            datastores[index] = replace(store, schema=schema)
+            datastore_gaps += owner_gaps
     datastore_gaps += supabase_gaps
     datastore_evidence += supabase_evidence
     services = tag_datastore_env(services, datastores)
@@ -127,6 +141,7 @@ def scan_repo(root: Path) -> ScanResult:
         appspec=appspec,
         gaps=gaps,
         evidence=[Evidence(path=path, line=line) for path, line in unique_evidence],
+        schema=schema,
     )
 
 

@@ -8,6 +8,236 @@
       "kind": "postgres",
       "mode": null,
       "name": "supabase",
+      "schema": {
+        "latest": "20260115110000",
+        "migrations": [
+          "supabase/migrations/20260110093000_init.sql",
+          "supabase/migrations/20260112140000_cleanup.sql",
+          "supabase/migrations/20260115110000_orders_rls.sql"
+        ],
+        "tables": [
+          {
+            "columns": [
+              {
+                "default": null,
+                "name": "entry",
+                "nullable": true,
+                "primary_key": false,
+                "references": null
+              }
+            ],
+            "evidence": "supabase/migrations/20260110093000_init.sql:52",
+            "name": "private.audit_log",
+            "policies": [],
+            "rls": false,
+            "write_scope": null
+          },
+          {
+            "columns": [
+              {
+                "default": "gen_random_uuid()",
+                "name": "id",
+                "nullable": false,
+                "primary_key": true,
+                "references": null
+              },
+              {
+                "default": null,
+                "name": "body",
+                "nullable": false,
+                "primary_key": false,
+                "references": null
+              }
+            ],
+            "evidence": "supabase/migrations/20260110093000_init.sql:45",
+            "name": "public.notes",
+            "policies": [],
+            "rls": false,
+            "write_scope": null
+          },
+          {
+            "columns": [
+              {
+                "default": "gen_random_uuid()",
+                "name": "id",
+                "nullable": false,
+                "primary_key": true,
+                "references": null
+              },
+              {
+                "default": null,
+                "name": "customer_id",
+                "nullable": false,
+                "primary_key": false,
+                "references": null
+              },
+              {
+                "default": null,
+                "name": "total_cents",
+                "nullable": false,
+                "primary_key": false,
+                "references": null
+              }
+            ],
+            "evidence": "supabase/migrations/20260110093000_init.sql:35",
+            "name": "public.orders",
+            "policies": [
+              {
+                "command": "select",
+                "evidence": "supabase/migrations/20260115110000_orders_rls.sql:3",
+                "name": "Customers see their orders",
+                "permissive": true,
+                "renamed_since": [],
+                "roles": [
+                  "authenticated"
+                ],
+                "using": "auth.uid() = customer_id",
+                "with_check": null
+              }
+            ],
+            "rls": true,
+            "write_scope": {
+              "basis": [
+                "policy \"Customers see their orders\" compares it to auth.uid() (supabase/migrations/20260115110000_orders_rls.sql:3)"
+              ],
+              "column": "customer_id",
+              "kind": "owner"
+            }
+          },
+          {
+            "columns": [
+              {
+                "default": null,
+                "name": "id",
+                "nullable": false,
+                "primary_key": true,
+                "references": "auth.users.id"
+              },
+              {
+                "default": null,
+                "name": "display_name",
+                "nullable": true,
+                "primary_key": false,
+                "references": null
+              },
+              {
+                "default": "now()",
+                "name": "created_at",
+                "nullable": false,
+                "primary_key": false,
+                "references": null
+              }
+            ],
+            "evidence": "supabase/migrations/20260110093000_init.sql:2",
+            "name": "public.profiles",
+            "policies": [
+              {
+                "command": "select",
+                "evidence": "supabase/migrations/20260110093000_init.sql:10",
+                "name": "Profiles are viewable by everyone",
+                "permissive": true,
+                "renamed_since": [],
+                "roles": [
+                  "public"
+                ],
+                "using": "true",
+                "with_check": null
+              },
+              {
+                "command": "update",
+                "evidence": "supabase/migrations/20260110093000_init.sql:14",
+                "name": "Users can update their own profile",
+                "permissive": true,
+                "renamed_since": [],
+                "roles": [
+                  "public"
+                ],
+                "using": "auth.uid() = id",
+                "with_check": null
+              }
+            ],
+            "rls": true,
+            "write_scope": {
+              "basis": [
+                "policy \"Users can update their own profile\" compares it to auth.uid() (supabase/migrations/20260110093000_init.sql:14)",
+                "it is the primary key and references auth.users.id: the row is the user"
+              ],
+              "column": "id",
+              "kind": "owner"
+            }
+          },
+          {
+            "columns": [
+              {
+                "default": "gen_random_uuid()",
+                "name": "id",
+                "nullable": false,
+                "primary_key": true,
+                "references": null
+              },
+              {
+                "default": null,
+                "name": "owner_id",
+                "nullable": false,
+                "primary_key": false,
+                "references": null
+              },
+              {
+                "default": null,
+                "name": "title",
+                "nullable": false,
+                "primary_key": false,
+                "references": null
+              },
+              {
+                "default": "false",
+                "name": "done",
+                "nullable": false,
+                "primary_key": false,
+                "references": null
+              }
+            ],
+            "evidence": "supabase/migrations/20260110093000_init.sql:19",
+            "name": "public.tasks",
+            "policies": [
+              {
+                "command": "update",
+                "evidence": "supabase/migrations/20260110093000_init.sql:31",
+                "name": "Authenticated users can update tasks",
+                "permissive": true,
+                "renamed_since": [],
+                "roles": [
+                  "authenticated"
+                ],
+                "using": "true",
+                "with_check": "true"
+              },
+              {
+                "command": "select",
+                "evidence": "supabase/migrations/20260110093000_init.sql:28",
+                "name": "Owners can view their tasks",
+                "permissive": true,
+                "renamed_since": [],
+                "roles": [
+                  "authenticated"
+                ],
+                "using": "auth.uid() = owner_id",
+                "with_check": null
+              }
+            ],
+            "rls": true,
+            "write_scope": {
+              "basis": [
+                "policy \"Owners can view their tasks\" compares it to auth.uid() (supabase/migrations/20260110093000_init.sql:28)"
+              ],
+              "column": "owner_id",
+              "kind": "owner"
+            }
+          }
+        ],
+        "unordered": [],
+        "unreplayable": []
+      },
       "version": null
     }
   ],

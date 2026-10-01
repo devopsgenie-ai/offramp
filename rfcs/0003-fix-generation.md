@@ -1,10 +1,10 @@
 ---
 rfc: 0003
 title: "Fix generation: a migration renderer for row-level-security findings"
-status: draft
+status: accepted
 authors: [devyansh-dg]
 created: 2026-09-27
-updated: 2026-09-27
+updated: 2026-09-28
 ---
 
 > Adds `fix`, a renderer that turns the audit's row-level-security findings into one new
@@ -139,11 +139,22 @@ Column
   name          str
   nullable      bool
   references    str?             # "auth.users.id", "public.profiles.id"
+  default       str?             # normalised, e.g. "auth.uid()": FIXES.md needs it,
+                                 # and so does the foreign-key basis below
+  primary_key   bool             # the "row is the user" basis needs it
 
 WriteScope
   kind          owner | server_only
   column        str?             # required for owner; must name one of columns
+  basis         [str]            # the evidence, in words, for the fix's comment
 ```
+
+`Table` and `Policy` also carry `evidence` (the `path:line` the checks already cite),
+and `Policy` carries `renamed_since`: the columns renamed after it was written, which is
+how "renamed after the policy" is recorded as data. A repository can declare Supabase
+without importing it (`datastore.supabase.disputed`), so no datastore exists to hold the
+schema. The scan result then carries it for the checks, and the fix has nothing to
+render.
 
 `checks/migrations.py` moves under `detect/` and gains column tracking: column lists in
 `create table`, inline and table-level `references`, and `alter table … add column`,
@@ -176,11 +187,20 @@ evidence, and the evidence agrees:
    either form with `(select auth.uid())`. The app's author has already declared that
    column the owner for some operation. A compound expression (`… or is_admin()`) is not
    evidence.
-2. **Foreign-key basis.** Exactly one column references `auth.users.id`. One hop is also
-   accepted: a column that references a table whose primary key itself references
-   `auth.users.id`, such as `profiles(id)`. That hop is what makes `profile_id` an owner.
-   A primary key that references `auth.users.id` counts too, and `profiles.id` is its own
-   owner.
+2. **The row is the user.** The table's primary key references `auth.users.id`, so
+   `profiles.id` is its own owner.
+3. **Foreign-key basis.** Exactly one column references `auth.users.id`, or one hop
+   through a table whose primary key references it (as `profile_id` does `profiles(id)`),
+   **and that column defaults to `auth.uid()`**. The corpus precision run showed why the
+   default is required (`docs/research/fix-precision.md`). Without it, the rule fixed 12
+   tables and 10 had a wrong owner: attribution columns such as `created_by` and
+   `requested_by`, which the app never set, and a roles table written by admins. A
+   foreign key proves a column names a user. The default proves the user it names is
+   whoever writes the row. A foreign key without the default is still a candidate: it
+   can contradict another basis, and it is the gap's proposal.
+
+Policy expressions are matched in either spelling, including pg_dump's
+`"auth"."uid"()` and `( SELECT "auth"."uid"() AS "uid")`.
 
 If the two bases name different columns, if either names more than one, or if the table
 had a column renamed after the policy that would be evidence (the replay stores policy
@@ -231,6 +251,15 @@ that changes behaviour the finding did not name has to be accepted by a human fi
 | same | not determined | inert block and gap |
 | `rls.permissive_write`, medium (INSERT only) | — | nothing; listed as "needs your decision" |
 | `rls.public_read` | — | nothing; listed as "needs your decision" |
+
+Enabling RLS also activates any policy already written on the table (Supabase Advisor
+lint 0007). A `true` UPDATE, DELETE or ALL among them is part of the same exposure, so it
+is dropped too. `FIXES.md` names every other policy that takes effect. An ALL policy
+whose read condition the replay cannot reproduce exactly is not rewritten, because the
+replay masks string literals. Its finding is `not_in_scope`, with the reason. When
+nothing can be fixed and only gaps remain, **no migration is written**: `FIXES.md` and
+`fixes.json` explain why. A comment-only migration re-emitted under a new version on
+every run would never converge.
 
 Three consequences of the rule, argued:
 
@@ -301,8 +330,13 @@ refuses to write (exit `2`) unless all of these hold:
 - every finding marked `gap` is still present, so the fix never makes a question
   disappear without an answer. This is why the inert block is a comment and not an
   enabled table with no policy;
-- no finding is present that was not present before, except the `public_read` findings
-  that the preserved-read policies are expected to raise, which are listed.
+- no finding is present that was not present before, except the ones the plan predicts
+  and lists. Those are the `public_read` findings the preserved-read policies raise,
+  plus the public reads and anonymous inserts that enabling RLS activates;
+- the statement count equals what the renderer wrote;
+- every read a policy granted before is still granted. No finding reports a table that
+  nobody can read, so this is checked directly. It is the locked-shut failure the
+  audit cannot see.
 
 This catches the left-open failure by construction. The two-policy OR case leaves the
 finding present, and the render fails. It also forces the generated SQL into the replay's
@@ -333,7 +367,11 @@ python skills/offramp/scripts/fix.py <repository> --out <directory> [--version <
   database as it was. Every fix is a new file.
 - **Versioning without a clock.** The default version is `Schema.latest + 1`. It is
   derived from the repository, sorts after every migration in it, and is identical on
-  every run over the same commit. A project whose database has migrations the repository
+  every run over the same commit. Migrations run in file-name order, and a repository
+  that mixes version widths breaks the equivalence: `20260127_x.sql` sorts after
+  `20260118172347_y.sql`. In that case the default is the smallest version as wide as
+  the latest that sorts after every file. If none exists, `fix` refuses and asks for
+  `--version`. The version is resolved only when a migration is written. A project whose database has migrations the repository
   lacks passes `--version` at the edge, where RFC-0001's `apply` takes `now`. The version
   is renderer input and is recorded in the manifest.
 - **Re-running converges.** Before the file is committed, a re-run is byte-identical.
@@ -454,12 +492,14 @@ have is rewritten.
   starts guessing from names fails here even as the gap count falls. That is RFC-0001's
   argument for `truth.yaml`, applied to the one field where a guess is most expensive.
 - **A new fixture, `lovable-rls-owners`,** carrying the awkward cases on purpose: a
-  table with RLS off and an inline `references auth.users` column (a full fix); an ALL
+  table with RLS off and an inline `references auth.users` column defaulting to
+  `auth.uid()` (a full fix); the same without the default (a gap proposing it); an ALL
   `true` policy on a table owned through `profiles(id)` (one hop, with the SELECT half
   preserved); two FK candidates (a gap listing both); a policy basis contradicting an FK
   basis (a gap); a column renamed after the policy that named it (a gap); a nullable owner
-  (fixed, with the note); an existing owner-scoped UPDATE beside a `true` one (drop only);
-  and an anonymous INSERT `true` (untouched).
+  proven by a policy on a table whose RLS was never enabled (fixed, with the notes); an
+  existing owner-scoped UPDATE beside a `true` one (drop only); and an anonymous INSERT
+  `true` (untouched).
 - **Round trip, as a unit test and a postcondition.** The four conditions above are
   asserted on every fixture. A deliberately broken renderer, one that adds without
   dropping, must make `fix` exit `2`.
@@ -535,3 +575,11 @@ be pointed at another.
 5. **One RFC or two.** The replay-as-detector and owner detection change the AppSpec for
    every scenario. They could land first under their own RFC, with this one reduced to the
    renderer. Reviewers should decide whether that split is real or ceremonial.
+6. **Owner of a row, or writer of a row?** A policy that lets an owner *read* ("Users can
+   view their own notifications") proves who a row is about, not who writes it. The
+   precision sample found two such tables. One is a notifications table where the app
+   inserts rows *for another user*. The other is a ledger that a server writes. Had
+   either been open, an owner-scoped replacement would have broken the app, or let users
+   write their own ledger. Accepting the policy basis for a command only when the existing
+   policy is itself for a write command would close this. It would also make this RFC's
+   own example, `tasks`, owned through a SELECT policy, a gap. Which way?

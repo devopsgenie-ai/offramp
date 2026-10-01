@@ -1,6 +1,6 @@
 # Gaps — task-board
 
-blocking: 5  important: 3  cosmetic: 2  (total 10)
+blocking: 6  important: 3  cosmetic: 2  (total 11)
 
 1 of these are actions rather than values: there is nothing to record, you do the thing and confirm it.
 
@@ -13,6 +13,14 @@ Does the Supabase database stay where it is? The client points at a hosted Supab
 - proposed: `external`
 - confidence: medium
 - evidence: `src/integrations/supabase/client.ts:2`
+
+### datastore.supabase.table.public.notes.write_scope
+
+Who may change rows in `public.notes`? No column is proven to identify a row's owner. No policy can be written without guessing. Answer with the owner column, or `server_only` if only your server should write.
+
+- proposed: none — this one has no sensible default
+- confidence: low
+- evidence: `supabase/migrations/20260110093000_init.sql:45`
 
 ### delivery.gitops_repo_url
 

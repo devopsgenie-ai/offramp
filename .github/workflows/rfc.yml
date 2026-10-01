@@ -35,7 +35,10 @@ jobs:
 
       - name: Collect changed paths
         run: |
-          git fetch --no-tags --depth=1 origin "$BASE_REF"
+          # Full history for the base branch: checkout already fetched everything
+          # (fetch-depth: 0), and a --depth=1 fetch here would graft main to one
+          # commit, leaving `main...HEAD` with no merge base once main moves on.
+          git fetch --no-tags origin "$BASE_REF"
           git diff --name-only "origin/$BASE_REF"...HEAD > /tmp/changed.txt
           cat /tmp/changed.txt
         env:

@@ -103,5 +103,7 @@ def test_answerable_set_rejects_a_pointer_into_never_answerable_space():
     assert "/services/0/name" in problems[0]
 
 
-def test_never_answerable_covers_source_and_service_names():
-    assert NEVER_ANSWERABLE == ("/source", "/services/*/name")
+def test_never_answerable_covers_source_service_and_table_names():
+    """A table's name is its identity (RFC-0003), as a service's is (RFC-0001)."""
+    assert NEVER_ANSWERABLE == ("/source", "/services/*/name",
+                                "/datastores/*/schema/tables/*/name")
