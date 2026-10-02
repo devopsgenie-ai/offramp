@@ -18,6 +18,10 @@ understand is the "confident and wrong" failure RFC-0001 exists to prevent.
 Stdlib only: a hand-written statement matcher over a deliberately narrow grammar.
 Function bodies are not replayed -- they run later, not at migration time -- but a `DO`
 block runs at migration time, so one that touches tables or RLS is unparseable.
+
+RFC-0004 adds functions and who may execute them. Bodies are read, never replayed, and
+functions are tracked apart from tables: a function statement this module does not
+understand makes the functions unknown and nothing else.
 """
 
 from __future__ import annotations
@@ -26,10 +30,13 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from rls import UID_PATTERN
 from spec import Column
+from spec import Function as SchemaFunction
 from spec import Policy as SchemaPolicy
 from spec import Schema
 from spec import Table as SchemaTable
+from spec import Write
 from walk import rel
 
 MIGRATIONS_DIR = Path("supabase") / "migrations"
@@ -69,7 +76,10 @@ _DO_BLOCK = re.compile(r"^do\b")
 _DO_TOUCHES = re.compile(
     r"\bcreate\s+(?:unlogged\s+)?table\b|\bdrop\s+table\b|\b(?:create|alter|drop)\s+policy\b"
     r"|\brow\s+level\s+security\b|\brename\s+to\b", re.S)
-_DYNAMIC = re.compile(r"\b(?:execute|loop|elsif|else|perform)\b")
+#: Control flow whose effect cannot be known without running it. `execute` is dynamic
+#: SQL, but not as a privilege (`grant execute on`) or a trigger's `execute function`.
+_DYNAMIC = re.compile(
+    r"\b(?:execute(?!\s+(?:on|function|procedure)\b)|loop|elsif|else|perform)\b")
 _GUARD = re.compile(r"^(?:begin\s+)?if\s+(?:not\s+)?exists\s*(?=\()", re.S)
 _NOISE = re.compile(
     r"^(?:end(?:\s+if)?|null|exception\s+when\s+[a-z_\s]+\s+then\s+null|declare\b.*)$", re.S)
@@ -110,6 +120,8 @@ class Replay:
     unparseable: list[str]     # "path:line: reason"
     untimestamped: list[str] = field(default_factory=list)   # order unknown
     latest: str | None = None  # highest leading version among the files
+    functions: dict[str, "_Function"] = field(default_factory=dict)   # by signature
+    function_problems: list[str] = field(default_factory=list)       # "path:line: reason"
 
 
 def split_statements(text: str) -> list[tuple[str, str, int]]:
@@ -148,7 +160,7 @@ def split_statements(text: str) -> list[tuple[str, str, int]]:
             masked.append(" ")
             i += len(chunk)
             continue
-        if char == ";":
+        if char == ";" and not _inside_atomic("".join(masked)):
             emit()
             i += 1
             continue
@@ -194,6 +206,21 @@ def split_statements(text: str) -> list[tuple[str, str, int]]:
         i += 1
     emit()
     return statements
+
+
+_ATOMIC = re.compile(r"\bbegin\s+atomic\b", re.I)
+
+
+def _inside_atomic(masked: str) -> bool:
+    """True inside a SQL-standard function body (`begin atomic ... end`, PostgreSQL 14),
+    whose statements end in `;` but belong to the CREATE FUNCTION around them. Only an
+    `end` that closes the body ends it; a `case ... end` inside it is a known limit."""
+    opened = None
+    for opened in _ATOMIC.finditer(masked):
+        pass
+    if opened is None:
+        return False
+    return not re.search(r"\bend\s*$", masked[opened.end():], re.I)
 
 
 def _unquote(identifier: str) -> str:
@@ -273,6 +300,16 @@ def _parse_policy_tail(tail: str) -> dict | None:
 class _State:
     def __init__(self) -> None:
         self.tables: dict[str, Table] = {}
+        self.functions: dict[str, _Function] = {}
+        self.function_problems: list[str] = []
+        #: Who a new function grants EXECUTE to. PostgreSQL's built-in default is a
+        #: global grant to `public`; Supabase adds `anon` and `authenticated` for
+        #: schema `public`, per schema. A function starts with the union of the two.
+        self.default_global: set[str] = {"public"}
+        self.default_schema: dict[str, set[str]] = {"public": {"anon", "authenticated"}}
+
+    def function_problem(self, where: str, reason: str) -> None:
+        self.function_problems.append(f"{where}: {reason}")
 
     def table(self, name: str) -> Table:
         return self.tables.setdefault(name, Table(name=name, rls=None, evidence=None))
@@ -302,6 +339,9 @@ def _apply(state: _State, original: str, masked: str, where: str, line: int) -> 
 
     if _DO_BLOCK.match(lowered):
         return _apply_do(state, original, where, line)
+    if _FN_STATEMENT.match(lowered):
+        _apply_function(state, original, flat, where, line)
+        return None
     if _TEMP_TABLE.match(lowered):
         return None
     if found := match(_CREATE_TABLE):
@@ -369,6 +409,9 @@ def _apply_do(state: _State, original: str, where: str, line: int) -> str | None
     The end state of that block does not depend on the guard, so its inner statements
     are replayed as written. Anything dynamic -- EXECUTE, a loop, another condition --
     stays unparseable: its effect cannot be known without running it.
+
+    RFC-0004: function statements in the block follow the same rule, and a block that
+    cannot be followed makes the functions unknown as well as the tables.
     """
     tag = _DOLLAR.search(original)
     if tag is None:
@@ -376,30 +419,41 @@ def _apply_do(state: _State, original: str, where: str, line: int) -> str | None
     close = original.find(tag.group(0), tag.end())
     body = original[tag.end():close if close != -1 else len(original)]
     lowered_body = body.lower()
-    if not _DO_TOUCHES.search(lowered_body):
-        _do_columns(state, body)
-        return None
-    if _DYNAMIC.search(re.sub(r"'(?:[^']|'')*'", "''", lowered_body)):
-        return "do block with dynamic SQL touching tables or RLS"
     path = where.rsplit(":", 1)[0]
     first_line = line + original[:tag.end()].count("\n")
+    if not _DO_TOUCHES.search(lowered_body):
+        _do_columns(state, body)
+        _do_functions(state, body, path, first_line)
+        return None
+
+    def fail(reason: str) -> str:
+        if _FN_TOUCHES.search(lowered_body):
+            state.function_problem(where, reason)
+        return reason
+
+    if _DYNAMIC.search(re.sub(r"'(?:[^']|'')*'", "''", lowered_body)):
+        return fail("do block with dynamic SQL touching tables or RLS")
     for inner_original, inner_masked, inner_line in split_statements(body):
         statement = _unguard(_collapse(inner_masked))
         if statement is None:
-            return "do block not understood"
+            return fail("do block not understood")
         inner_start = inner_line
         lowered = statement.lower()
         if not statement or _NOISE.match(lowered):
             continue
+        at = first_line + inner_start - 1 + _line_offset(inner_original, statement)
         if lowered.startswith("if ") or lowered.startswith("do "):
             if _DO_TOUCHES.search(lowered):
-                return "do block with a condition that is not an existence check"
+                return fail("do block with a condition that is not an existence check")
             _forget_columns(state, statement)
+            if _FN_TOUCHES.search(lowered):
+                state.function_problem(f"{path}:{at}", "function statement under a condition "
+                                                       "that is not an existence check")
             continue
-        at = first_line + inner_start - 1 + _line_offset(inner_original, statement)
-        reason = _apply(state, statement, statement, f"{path}:{at}", at)
+        reason = _apply(state, _function_original(inner_original, statement), statement,
+                        f"{path}:{at}", at)
         if reason:
-            return reason
+            return fail(reason)
     return None
 
 
@@ -472,7 +526,8 @@ def replay(root: Path, extra: "tuple[tuple[str, str], ...] | list" = ()) -> Repl
                      if not _TIMESTAMPED.match(path.name)]
     return Replay(files=files, tables=state.tables,
                   unparseable=unparseable, untimestamped=untimestamped,
-                  latest=_latest(relative.rsplit("/", 1)[-1] for relative in files))
+                  latest=_latest(relative.rsplit("/", 1)[-1] for relative in files),
+                  functions=state.functions, function_problems=state.function_problems)
 
 
 def _latest(names) -> str | None:
@@ -490,8 +545,13 @@ def detect_schema(root: Path, extra=()) -> Schema | None:
     tables = None
     if not (result.unparseable or result.untimestamped):
         tables = [_schema_table(table) for _, table in sorted(result.tables.items())]
+    functions = None
+    if not (result.function_problems or result.untimestamped):
+        functions = [_schema_function(function)
+                     for _, function in sorted(result.functions.items())]
     return Schema(migrations=result.files, unreplayable=result.unparseable,
-                  unordered=result.untimestamped, latest=result.latest, tables=tables)
+                  unordered=result.untimestamped, latest=result.latest, tables=tables,
+                  functions=functions, functions_unreplayable=result.function_problems)
 
 
 def _schema_table(table: Table) -> SchemaTable:
@@ -838,3 +898,552 @@ def _rename_column(state: _State, table: Table, old: str, new: str) -> bool:
                                     if item not in policy.renamed_since)
     state.retarget(f"{table.name}.{old}", f"{table.name}.{new}")
     return True
+
+
+# -- Functions -------------------------------------------------------------------------
+#
+# RFC-0004. Everything below changes the replay's functions and nothing else. A function
+# statement it does not understand records a problem, which makes `Schema.functions`
+# None; it never returns an unparseable reason, so it never costs the RLS checks their
+# answer. Bodies are read, shallowly, and never replayed.
+
+_FN_STATEMENT = re.compile(
+    r"^(?:create\s+(?:or\s+replace\s+)?function|drop\s+function|alter\s+function"
+    r"|alter\s+default\s+privileges\b.*\bon\s+(?:functions|routines)\b"
+    r"|(?:grant|revoke)\b.*?\bon\s+(?:function|routine|all\s+(?:functions|routines))\b)",
+    re.S)
+#: A function statement anywhere in a text, string literals included: used to decide
+#: whether a block the replay cannot follow had any bearing on functions.
+_FN_TOUCHES = re.compile(
+    r"\bcreate\s+(?:or\s+replace\s+)?function\b|\b(?:drop|alter)\s+function\b"
+    r"|\b(?:grant|revoke)\b[^;]*?\bon\s+(?:function|routine|all\s+(?:functions|routines))\b"
+    r"|\balter\s+default\s+privileges\b[^;]*?\bon\s+(?:functions|routines)\b", re.S)
+_TRACKED = ("public", "anon", "authenticated")
+#: The role that runs the migrations: default privileges set for it apply to the
+#: functions they create, and those set FOR ROLE anyone else do not.
+_MIGRATION_ROLES = {"postgres", "current_user", "session_user", "current_role"}
+#: Roles whose ownership leaves a function bypassing RLS as it would by default.
+_OWN_ROLES = _MIGRATION_ROLES | {"supabase_admin"}
+_TYPE_ALIASES = {
+    "int": "integer", "int4": "integer", "int8": "bigint", "int2": "smallint",
+    "bool": "boolean", "float8": "double precision", "float": "double precision",
+    "float4": "real", "varchar": "character varying", "char": "character",
+    "bpchar": "character", "decimal": "numeric", "varbit": "bit varying",
+    "timestamptz": "timestamp with time zone", "timestamp": "timestamp without time zone",
+    "timetz": "time with time zone", "time": "time without time zone",
+}
+_MULTIWORD_TYPES = {
+    "double precision", "character varying", "bit varying", "timestamp with time zone",
+    "timestamp without time zone", "time with time zone", "time without time zone",
+}
+_HARMLESS_FN_ACTION = re.compile(
+    r"(?:\s*(?:immutable|stable|volatile|(?:not\s+)?leakproof|strict|restrict"
+    r"|called\s+on\s+null\s+input|returns\s+null\s+on\s+null\s+input"
+    r"|cost\s+[\d.]+|rows\s+[\d.]+|parallel\s+(?:unsafe|restricted|safe)))*\s*", re.I)
+_WRITE_FORMS = (
+    ("insert", re.compile(rf"\binsert\s+into\s+{_QNAME}", re.I)),
+    ("update", re.compile(
+        rf"\bupdate\s+(?:only\s+)?{_QNAME}\s*\*?\s+(?:(?:as\s+)?{_IDENT}\s+)?set\b", re.I)),
+    ("delete", re.compile(rf"\bdelete\s+from\s+(?:only\s+)?{_QNAME}", re.I)),
+)
+_BODY_DYNAMIC = re.compile(r"\bexecute\b(?!\s+(?:on|function|procedure)\b)|\bdblink\w*\s*\(")
+_COMPARE = r"(?:=|<>|!=|\bis\s+(?:not\s+)?distinct\s+from\b)"
+#: Words before a parenthesis that are not a call that checks the caller: a value list,
+#: a subquery, or a built-in that only passes the value along.
+_NOT_A_CHECK = {
+    "values", "in", "exists", "select", "where", "and", "or", "not", "if", "when", "then",
+    "else", "return", "returning", "coalesce", "nullif", "greatest", "least", "concat",
+    "format", "cast", "array", "row", "any", "all", "some", "raise", "notice", "into",
+    "set", "on", "using", "check", "from", "join", "case", "elsif", "perform",
+}
+
+
+@dataclass
+class _Function:
+    name: str                  # "public.add_points"
+    types: list[str]           # callable parameters' types, normalised
+    params: list[str]
+    definer: bool
+    trigger: bool
+    owner: str | None
+    grants: set[str]
+    writes: list[Write] | None
+    compares_caller: list[str]
+    role_check: bool
+    evidence: str
+
+    @property
+    def signature(self) -> str:
+        return f"{self.name}({', '.join(self.types)})"
+
+
+def _schema_function(function: _Function) -> SchemaFunction:
+    grants = function.grants
+    executable = [role for role in ("anon", "authenticated") if {"public", role} & grants]
+    return SchemaFunction(
+        name=function.name, signature=function.signature, params=list(function.params),
+        definer=function.definer, trigger=function.trigger, owner=function.owner,
+        grants=sorted(grants), executable_by=executable,
+        writes=None if function.writes is None else [
+            Write(verb=w.verb, table=w.table, uses=list(w.uses), line=w.line)
+            for w in function.writes],
+        compares_caller=list(function.compares_caller), role_check=function.role_check,
+        evidence=function.evidence,
+    )
+
+
+def _function_original(original: str, statement: str) -> str:
+    """For a CREATE FUNCTION found behind a guard in a DO block, the original text from
+    the CREATE on: the body is masked in `statement`, and reading it needs the source."""
+    if re.match(r"create\s+(?:or\s+replace\s+)?function\b", statement, re.I):
+        found = re.search(r"\bcreate\s+(?:or\s+replace\s+)?function\b", original, re.I)
+        if found:
+            return original[found.start():]
+    return statement
+
+
+def _do_functions(state: _State, body: str, path: str, first_line: int) -> None:
+    """Function statements in a DO block that touches no tables, policies or RLS. As for
+    policies: a statement under an existence guard is read as written; dynamic SQL or
+    any other condition makes the functions unknown."""
+    if not _FN_TOUCHES.search(body.lower()):
+        return
+    if _DYNAMIC.search(re.sub(r"'(?:[^']|'')*'", "''", body.lower())):
+        state.function_problem(f"{path}:{first_line}", "do block with dynamic SQL touching "
+                                                       "functions")
+        return
+    for inner_original, inner_masked, inner_line in split_statements(body):
+        statement = _unguard(_collapse(inner_masked))
+        at = first_line + inner_line - 1
+        if statement is None:
+            if _FN_TOUCHES.search(inner_masked.lower()):
+                state.function_problem(f"{path}:{at}", "do block not understood")
+            continue
+        lowered = statement.lower()
+        if not statement or _NOISE.match(lowered):
+            continue
+        at += _line_offset(inner_original, statement)
+        if lowered.startswith(("if ", "do ")):
+            if _FN_TOUCHES.search(lowered):
+                state.function_problem(f"{path}:{at}", "function statement under a condition "
+                                                       "that is not an existence check")
+            continue
+        if _FN_STATEMENT.match(lowered):
+            _apply_function(state, _function_original(inner_original, statement),
+                            _collapse(statement), f"{path}:{at}", at)
+
+
+def _apply_function(state: _State, original: str, flat: str, where: str, line: int) -> None:
+    lowered = flat.lower()
+    if re.match(r"create\s+(?:or\s+replace\s+)?function\b", lowered):
+        reason = _create_function(state, original, flat, where, line)
+    elif lowered.startswith("drop function"):
+        reason = _drop_function(state, flat)
+    elif lowered.startswith("alter function"):
+        reason = _alter_function(state, flat)
+    elif lowered.startswith("alter default privileges"):
+        reason = _default_privileges(state, flat)
+    else:
+        reason = _grant(state, flat)
+    if reason:
+        state.function_problem(where, reason)
+
+
+# -- names, arguments and types --
+
+def _words(text: str) -> list[str]:
+    """Split on whitespace outside quotes and parentheses; `=` is a word of its own."""
+    words: list[str] = []
+    current: list[str] = []
+    depth = 0
+    quoted = False
+    for char in re.sub(r"\s+(?=[(\[])", "", text):
+        if char == '"':
+            quoted = not quoted
+        elif not quoted and char == "(":
+            depth += 1
+        elif not quoted and char == ")":
+            depth -= 1
+        if not quoted and depth == 0 and (char.isspace() or char == "="):
+            if current:
+                words.append("".join(current))
+                current = []
+            if char == "=":
+                words.append("=")
+            continue
+        current.append(char)
+    if current:
+        words.append("".join(current))
+    return words
+
+
+def _normalise_type(text: str) -> str:
+    text = re.sub(r"\([^()]*\)", "", _collapse(text)).strip()
+    arrays = ""
+    if found := re.search(r"(?:\s*\[\s*\d*\s*\])+$", text):
+        arrays = "[]" * found.group(0).count("[")
+        text = text[:found.start()].strip()
+    parts = [_unquote(part) for part in re.split(r'\.(?=(?:[^"]*"[^"]*")*[^"]*$)', text)]
+    if len(parts) == 2 and parts[0] == "pg_catalog":
+        parts = parts[1:]
+    name = re.sub(r"\s+", " ", ".".join(parts))
+    return _TYPE_ALIASES.get(name, name) + arrays
+
+
+def _arguments(text: str) -> list[tuple[str, str, str]] | None:
+    """(mode, name, type) per argument of a function's parameter list."""
+    arguments = []
+    for item in _split_top(text):
+        words = _words(item)
+        for index, word in enumerate(words):
+            if word == "=" or word.lower() == "default":
+                words = words[:index]
+                break
+        mode = "in"
+        if words and words[0].lower() in ("in", "out", "inout", "variadic"):
+            mode = words.pop(0).lower()
+        if not words:
+            return None
+        phrase = re.sub(r"\([^()]*\)|\[\s*\d*\s*\]", "", " ".join(words)).lower().strip()
+        if len(words) == 1 or phrase in _MULTIWORD_TYPES:
+            name, type_ = "", " ".join(words)
+        else:
+            name, type_ = _unquote(words[0]), " ".join(words[1:])
+        arguments.append((mode, name, _normalise_type(type_)))
+    return arguments
+
+
+def _callable(arguments: list[tuple[str, str, str]]) -> list[tuple[str, str, str]]:
+    """The arguments a caller passes, which also make up the signature: not OUT."""
+    return [argument for argument in arguments if argument[0] != "out"]
+
+
+def _function_refs(text: str) -> list[tuple[str, list[str] | None]] | None:
+    """`name[(args)][, name[(args)] ...]` as (qualified name, argument types or None)."""
+    refs = []
+    rest = text.strip()
+    while rest:
+        found = re.match(rf"{_QNAME}\s*", rest, re.I)
+        if found is None:
+            return None
+        name = _qualify(found.group(1))
+        rest = rest[found.end():]
+        types = None
+        if rest.startswith("("):
+            group = _balanced(rest, 0)
+            arguments = _arguments(group[0]) if group else None
+            if arguments is None:
+                return None
+            types = [type_ for _, _, type_ in _callable(arguments)]
+            rest = rest[group[1]:].strip()
+        refs.append((name, types))
+        if rest.startswith(","):
+            rest = rest[1:].strip()
+        elif rest:
+            return None
+    return refs
+
+
+def _resolve(state: _State, name: str, types: list[str] | None,
+             verb: str) -> tuple[list[_Function], str | None]:
+    """The functions a reference names. A name these migrations never define is a
+    function made elsewhere, and is no business of theirs; a name they define but whose
+    argument types do not match, or an overloaded name without types, is not understood."""
+    candidates = [f for f in state.functions.values() if f.name == name]
+    if types is not None:
+        exact = [f for f in candidates if f.types == types]
+        if exact or not candidates:
+            return exact, None
+        return [], (f"{verb} names {name}({', '.join(types)}), which these migrations do "
+                    f"not define with those argument types")
+    if len(candidates) > 1:
+        return [], f"{verb} names {name}, which has {len(candidates)} overloads"
+    return candidates, None
+
+
+def _roles(text: str) -> list[str]:
+    text = re.sub(r"\s+(?:with\s+grant\s+option|granted\s+by\s+\S+|cascade|restrict)\s*$",
+                  "", text.strip(), flags=re.I)
+    names = [re.sub(r"^group\s+", "", item.strip(), flags=re.I) for item in text.split(",")]
+    return [_unquote(name) for name in names if name]
+
+
+# -- statements --
+
+def _create_function(state: _State, original: str, flat: str, where: str,
+                     line: int) -> str | None:
+    found = re.match(rf"create\s+(?:or\s+replace\s+)?function\s+{_QNAME}\s*\(", flat, re.I)
+    group = _balanced(flat, found.end() - 1) if found else None
+    arguments = _arguments(group[0]) if group else None
+    if arguments is None:
+        return "create function statement not understood"
+    callable_ = _callable(arguments)
+    name = _qualify(found.group(1))
+    clauses = flat[group[1]:].lower()
+    language = re.search(r'\blanguage\s+"?([a-z_][a-z0-9_]*)"?', clauses)
+    function = _Function(
+        name=name, types=[type_ for _, _, type_ in callable_],
+        params=[name_ for _, name_, _ in callable_],
+        definer=bool(re.search(r"\bsecurity\s+definer\b", clauses)),
+        trigger=bool(re.search(r"\breturns\s+(?:event_)?trigger\b", clauses)),
+        owner=None, grants=set(), writes=None, compares_caller=[], role_check=False,
+        evidence=where,
+    )
+    previous = state.functions.get(function.signature)
+    if previous is not None:
+        # CREATE OR REPLACE keeps the function's grants and owner, as PostgreSQL does.
+        function.grants, function.owner = previous.grants, previous.owner
+    else:
+        schema = name.split(".", 1)[0]
+        function.grants = set(state.default_global) | state.default_schema.get(schema, set())
+    body = None if _ATOMIC.search(clauses) else _function_body(original)
+    if body is not None and language and language.group(1) in ("sql", "plpgsql"):
+        text, offset = body
+        _read_body(function, text, line + offset)
+    state.functions[function.signature] = function
+    return None
+
+
+def _function_body(original: str) -> tuple[str, int] | None:
+    """The body of a CREATE FUNCTION, from its dollar-quoted or single-quoted string, and
+    how many lines into the statement it starts."""
+    returns = re.search(r"\breturns\b", original, re.I)
+    start = returns.end() if returns else 0
+    found = re.compile(r"\bas\s+(\$[A-Za-z0-9_]*\$|')", re.I).search(original, start)
+    if found is None:
+        return None
+    opening = found.group(1)
+    begin = found.end()
+    if opening != "'":
+        close = original.find(opening, begin)
+        if close == -1:
+            return None
+        return original[begin:close], original[:begin].count("\n")
+    end = begin
+    while end < len(original):
+        if original.startswith("''", end):
+            end += 2
+            continue
+        if original[end] == "'":
+            return original[begin:end].replace("''", "'"), original[:begin].count("\n")
+        end += 1
+    return None
+
+
+def _drop_function(state: _State, flat: str) -> str | None:
+    found = re.match(r"drop\s+function\s+(?:if\s+exists\s+)?(.*?)(?:\s+(?:cascade|restrict))?$",
+                     flat, re.I | re.S)
+    refs = _function_refs(found.group(1)) if found else None
+    if refs is None:
+        return "drop function statement not understood"
+    for name, types in refs:
+        functions, reason = _resolve(state, name, types, "drop function")
+        if reason:
+            return reason
+        for function in functions:
+            del state.functions[function.signature]
+    return None
+
+
+def _alter_function(state: _State, flat: str) -> str | None:
+    found = re.match(rf"alter\s+function\s+{_QNAME}\s*", flat, re.I)
+    if found is None:
+        return "alter function statement not understood"
+    reference, rest = flat[found.start(1):found.end()], flat[found.end():]
+    if rest.startswith("("):
+        group = _balanced(rest, 0)
+        if group is None:
+            return "alter function statement not understood"
+        reference, rest = reference + rest[:group[1]], rest[group[1]:]
+    refs = _function_refs(reference)
+    if refs is None or len(refs) != 1:
+        return "alter function statement not understood"
+    functions, reason = _resolve(state, *refs[0], "alter function")
+    if reason or not functions:
+        return reason
+    [function] = functions
+    action = rest.strip()
+    lowered = action.lower()
+    if renamed := re.fullmatch(rf"rename\s+to\s+({_IDENT})", action, re.I):
+        del state.functions[function.signature]
+        function.name = f"{function.name.split('.', 1)[0]}.{_unquote(renamed.group(1))}"
+        state.functions[function.signature] = function
+        return None
+    if moved := re.fullmatch(rf"set\s+schema\s+({_IDENT})", action, re.I):
+        del state.functions[function.signature]
+        function.name = f"{_unquote(moved.group(1))}.{function.name.split('.', 1)[1]}"
+        state.functions[function.signature] = function
+        return None
+    if owner := re.fullmatch(rf"owner\s+to\s+({_IDENT})", action, re.I):
+        role = _unquote(owner.group(1))
+        function.owner = None if role in _OWN_ROLES else role
+        return None
+    rest = lowered
+    if security := re.search(r"\b(?:external\s+)?security\s+(definer|invoker)\b", lowered):
+        function.definer = security.group(1) == "definer"
+        rest = (lowered[:security.start()] + lowered[security.end():]).strip()
+    if rest and not (re.match(r"(?:set|reset)\s", rest) or _HARMLESS_FN_ACTION.fullmatch(rest)):
+        return "alter function statement not understood"
+    return None
+
+
+_GRANT = re.compile(
+    r"(grant|revoke)\s+(grant\s+option\s+for\s+)?(.+?)\s+on\s+(.+?)\s+(?:to|from)\s+(.+)$",
+    re.I | re.S)
+
+
+def _privilege(text: str) -> bool:
+    """Whether a privilege list includes EXECUTE, the only one a function has."""
+    return any(item.strip().lower() in ("execute", "all", "all privileges")
+               for item in text.split(","))
+
+
+def _grant(state: _State, flat: str) -> str | None:
+    found = _GRANT.match(flat)
+    if found is None:
+        return "grant or revoke on a function not understood"
+    verb, option, privileges, target, roles = found.groups()
+    if option or not _privilege(privileges):
+        return None
+    roles = [role for role in _roles(roles) if role in _TRACKED]
+    if every := re.fullmatch(r"all\s+(?:functions|routines)\s+in\s+schema\s+(.+)", target,
+                             re.I | re.S):
+        schemas = {_unquote(item) for item in every.group(1).split(",")}
+        functions = [f for f in state.functions.values() if f.name.split(".", 1)[0] in schemas]
+    else:
+        listed = re.fullmatch(r"(?:function|routine)\s+(.+)", target, re.I | re.S)
+        refs = _function_refs(listed.group(1)) if listed else None
+        if refs is None:
+            return "grant or revoke on a function not understood"
+        functions = []
+        for name, types in refs:
+            found_functions, reason = _resolve(state, name, types, verb.lower())
+            if reason:
+                return reason
+            functions += found_functions
+    for function in functions:
+        if verb.lower() == "grant":
+            function.grants |= set(roles)
+        else:
+            function.grants -= set(roles)
+    return None
+
+
+def _default_privileges(state: _State, flat: str) -> str | None:
+    """ALTER DEFAULT PRIVILEGES for functions created later. Per-schema defaults only add
+    to the global ones, as in PostgreSQL, so a per-schema revoke cannot remove the
+    built-in grant to `public`. Defaults for another role's objects do not apply to the
+    functions these migrations create."""
+    found = re.match(r"alter\s+default\s+privileges\s+(.*?)\s*((?:grant|revoke)\s.*)$",
+                     flat, re.I | re.S)
+    if found is None:
+        return "alter default privileges not understood"
+    options, statement = found.groups()
+    owners = re.search(rf"\bfor\s+(?:role|user)\s+({_IDENT}(?:\s*,\s*{_IDENT})*)", options,
+                       re.I)
+    if owners and not {_unquote(item) for item in owners.group(1).split(",")} & _MIGRATION_ROLES:
+        return None
+    schemas = re.search(rf"\bin\s+schema\s+({_IDENT}(?:\s*,\s*{_IDENT})*)", options, re.I)
+    grant = _GRANT.match(statement)
+    if grant is None or not re.fullmatch(r"functions|routines", grant.group(4).strip(), re.I):
+        return "alter default privileges not understood"
+    verb, option, privileges, _, roles = grant.groups()
+    if option or not _privilege(privileges):
+        return None
+    roles = {role for role in _roles(roles) if role in _TRACKED}
+    targets = ([state.default_schema.setdefault(_unquote(item), set())
+                for item in schemas.group(1).split(",")] if schemas
+               else [state.default_global])
+    for target in targets:
+        if verb.lower() == "grant":
+            target |= roles
+        else:
+            target -= roles
+    return None
+
+
+# -- reading a body --
+
+def _param_pattern(name: str) -> str:
+    escaped = re.escape(name.lower())
+    return rf'(?:"{escaped}"|(?<![\w$."]){escaped}(?![\w$]))'
+
+
+def _uses(text: str, params: list[str]) -> list[str]:
+    """Parameters a statement mentions, by name or by position, in parameter order."""
+    positions = {int(n) for n in re.findall(r"(?<![\w$])\$(\d+)(?!\d)", text)}
+    uses = []
+    for index, name in enumerate(params, start=1):
+        if index in positions or (name and re.search(_param_pattern(name), text)):
+            uses.append(name or f"${index}")
+    return uses
+
+
+def _read_body(function: _Function, body: str, first_line: int) -> None:
+    """Writes, and how the body asks who the caller is. Shallow by design: no PL/pgSQL
+    parser, only each INSERT, UPDATE and DELETE up to the next top-level `;`."""
+    statements = split_statements(body)
+    text = " ; ".join(_collapse(masked) for _, masked, _ in statements).lower()
+    writes: list[Write] | None = None if _BODY_DYNAMIC.search(text) else []
+    for _, masked, inner_line in statements if writes is not None else []:
+        for verb, pattern in _WRITE_FORMS:
+            for found in pattern.finditer(masked):
+                written = found.group(1)
+                table = _qualify(written) if "." in written else _unquote(written)
+                at = first_line + inner_line - 1 + masked[:found.start()].count("\n")
+                writes.append(Write(verb=verb, table=table,
+                                    uses=_uses(masked[found.start():].lower(),
+                                               function.params),
+                                    line=at))
+    if writes is not None:
+        writes.sort(key=lambda write: write.line)
+    function.writes = writes
+    function.compares_caller, function.role_check = _caller(text, body.lower(),
+                                                            function.params)
+
+
+def _caller(text: str, raw: str, params: list[str]) -> tuple[list[str], bool]:
+    """(parameters compared with the caller, whether a role check is made). A variable
+    assigned auth.uid() stands for the caller. Testing that someone is signed in, or
+    recording them as the actor, is neither."""
+    aliases = set(re.findall(
+        rf"\b([a-z_][\w$]*)(?:\s+[a-z_][\w$.]*(?:\s*\[\s*\])?)?\s*(?::=|\bdefault\b)\s*"
+        rf"{UID_PATTERN}", text))
+    aliases |= set(re.findall(rf"\bselect\s+{UID_PATTERN}\s+into\s+(?:strict\s+)?"
+                              rf"([a-z_][\w$]*)", text))
+    terms = [UID_PATTERN] + [rf"(?<![\w$.]){re.escape(a)}(?![\w$(])" for a in sorted(aliases)]
+    caller = "(?:" + "|".join(terms) + ")"
+    compared = []
+    for index, name in enumerate(params, start=1):
+        param = rf"(?:{_param_pattern(name)}|(?<![\w$])\${index}(?!\d))" if name \
+            else rf"(?<![\w$])\${index}(?!\d)"
+        if re.search(rf"{param}\s*{_COMPARE}\s*{caller}|{caller}\s*{_COMPARE}\s*{param}",
+                     text):
+            compared.append(name or f"${index}")
+    role_check = bool(re.search(r'"?auth"?\s*\.\s*"?(?:role|jwt)"?\s*\(', text)
+                      or re.search(r"current_setting\s*\(\s*'request\.jwt", raw))
+    if not role_check:
+        role_check = any(_inside_a_call(text, found.start())
+                         for found in re.finditer(caller, text))
+    return compared, role_check
+
+
+def _inside_a_call(text: str, position: int) -> bool:
+    """Whether `position` is an argument of a function call, such as has_role(...)."""
+    depth = 0
+    index = position - 1
+    while index >= 0:
+        if text[index] == ")":
+            depth += 1
+        elif text[index] == "(":
+            if depth == 0:
+                break
+            depth -= 1
+        index -= 1
+    if index < 0:
+        return False
+    word = re.search(r'([\w$."]+)\s*$', text[:index])
+    if word is None:
+        return False
+    name = word.group(1).split(".")[-1].strip('"')
+    return bool(name) and not name[0].isdigit() and name not in _NOT_A_CHECK
