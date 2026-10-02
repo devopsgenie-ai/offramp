@@ -9,6 +9,8 @@
       "mode": null,
       "name": "supabase",
       "schema": {
+        "functions": [],
+        "functions_unreplayable": [],
         "latest": "20260401090000",
         "migrations": [
           "supabase/migrations/20260401090000_odd_names.sql"

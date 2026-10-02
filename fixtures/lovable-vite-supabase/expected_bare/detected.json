@@ -9,6 +9,37 @@
       "mode": null,
       "name": "supabase",
       "schema": {
+        "functions": [
+          {
+            "compares_caller": [],
+            "definer": true,
+            "evidence": "supabase/migrations/20260112140000_cleanup.sql:3",
+            "executable_by": [
+              "anon",
+              "authenticated"
+            ],
+            "grants": [
+              "anon",
+              "authenticated",
+              "public"
+            ],
+            "name": "public.handle_new_user",
+            "owner": null,
+            "params": [],
+            "role_check": false,
+            "signature": "public.handle_new_user()",
+            "trigger": true,
+            "writes": [
+              {
+                "line": 9,
+                "table": "public.profiles",
+                "uses": [],
+                "verb": "insert"
+              }
+            ]
+          }
+        ],
+        "functions_unreplayable": [],
         "latest": "20260115110000",
         "migrations": [
           "supabase/migrations/20260110093000_init.sql",
