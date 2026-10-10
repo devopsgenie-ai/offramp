@@ -27,6 +27,9 @@ SIGNED_IN = ("authenticated",)
 #: initplan subselect, which pg_dump deparses with an `as uid` alias.
 _CALL = r'"?auth"?\s*\.\s*"?uid"?\(\s*\)'
 _UID = rf'(?:{_CALL}|\(\s*select\s+{_CALL}(?:\s+as\s+"?uid"?)?\s*\))'
+#: The same pattern for the replay's function reading (RFC-0004), so policy and function
+#: bodies never disagree about how the caller is spelled. Lower-cased input.
+UID_PATTERN = _UID
 _NAME = r'"(?:[^"]|"")+"|[a-z_][a-z0-9_$]*'
 _COLUMN = rf"(?:(?P<qualifier>{_NAME})\s*\.\s*)?(?P<column>{_NAME})"
 _OWNER = (re.compile(rf"^{_UID}\s*=\s*{_COLUMN}$"), re.compile(rf"^{_COLUMN}\s*=\s*{_UID}$"))

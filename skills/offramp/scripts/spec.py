@@ -23,6 +23,8 @@ DATASTORE_MODES = ("in_cluster", "managed", "external")
 PROBE_ROLES = ("liveness", "readiness", "startup")
 PROBE_KINDS = ("http", "tcp")
 WRITE_SCOPE_KINDS = ("owner", "server_only")
+WRITE_VERBS = ("insert", "update", "delete")
+GRANTEES = ("public", "anon", "authenticated")
 SERVICE_ROLES = ("web", "api", "worker", "cron")
 
 #: Report order. Blocking first, because a blocking gap means the output will not work.
@@ -158,6 +160,35 @@ class Table:
 
 
 @dataclass
+class Write:
+    """An INSERT, UPDATE or DELETE in a function body, read shallowly. RFC-0004."""
+
+    verb: str                  # insert | update | delete
+    table: str                 # as written, schema-qualified when it was
+    uses: list[str]            # parameters it mentions: names, or "$n" for unnamed ones
+    line: int                  # line in the migration file
+
+
+@dataclass
+class Function:
+    """A function the migrations define, and who may execute it. RFC-0004."""
+
+    name: str                  # "public.add_points"
+    signature: str             # "public.add_points(uuid, integer)"; identity
+    params: list[str]          # callable parameters in order; "" for an unnamed one
+    definer: bool              # SECURITY DEFINER
+    trigger: bool              # RETURNS trigger: not callable over the API
+    owner: str | None          # None: the role that ran the migrations
+    grants: list[str]          # who holds EXECUTE, of "public", "anon", "authenticated"
+    #: Derived from grants: every role inherits what "public" holds.
+    executable_by: list[str]
+    writes: list[Write] | None # None when the body could not be read
+    compares_caller: list[str] # parameters the body compares with auth.uid()
+    role_check: bool           # auth.uid() passed to a call, or auth.role()/jwt() read
+    evidence: str              # path:line of the defining statement
+
+
+@dataclass
 class Schema:
     """The replay of `supabase/migrations/`, as a detector. RFC-0003: one replay with
     two consumers, the audit's RLS checks and the fix renderer, so they can never
@@ -168,6 +199,13 @@ class Schema:
     unordered: list[str]       # no leading version; order unknown, so tables is None
     latest: str | None         # highest migration version seen
     tables: list[Table] | None
+    #: RFC-0004. None when a function statement was not understood, or the order is
+    #: unknown. Tracked apart from tables: neither costs the other its answer.
+    functions: list[Function] | None = None
+    #: "path:line: reason" for each function statement not understood. Non-empty
+    #: means functions is None. Goes beyond RFC-0004's sketch: a check that cannot
+    #: assess has to say why.
+    functions_unreplayable: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -312,4 +350,11 @@ def check_enums(appspec: AppSpec, gaps: list[Gap]) -> list[str]:
             names = {column.name for column in table.columns or []}
             if scope.kind == "owner" and scope.column not in names:
                 problems.append(f"table {table.name}: owner {scope.column!r} is not a column")
+        for function in (datastore.schema.functions or []) if datastore.schema else []:
+            for grantee in function.grants:
+                if grantee not in GRANTEES:
+                    problems.append(f"function {function.signature}: grantee={grantee!r}")
+            for write in function.writes or []:
+                if write.verb not in WRITE_VERBS:
+                    problems.append(f"function {function.signature}: verb={write.verb!r}")
     return problems
