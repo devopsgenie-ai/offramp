@@ -1,7 +1,7 @@
 ---
 rfc: 0005
 title: "Two tracks: an auditor and a generator over one shared core"
-status: draft
+status: accepted
 authors: [ishantdeep-hue]
 created: 2026-10-10
 updated: 2026-10-10
@@ -102,9 +102,16 @@ generalises it (see *Two build orders*).
 
 Three rules govern the boundary:
 
-1. **A change to a core path needs the approval of a reviewer for each track.** This is
-   enforced by `.github/CODEOWNERS`, not by convention. Track paths keep today's rule of
-   one maintainer's approval.
+1. **A change to a core path needs the agreement of both tracks.** Today that is
+   enforced by the existing protection on `main`, not by anything this RFC adds. The
+   ruleset requires one code-owner approval, and an author cannot approve their own
+   pull request. With two maintainers, every change is therefore written by one and
+   approved by the other. `.github/CODEOWNERS` lists the core paths explicitly so that
+   a reviewer can see when a change touches them. It cannot do more than that on its
+   own, because any one listed owner satisfies a CODEOWNERS rule. If the project grows
+   past two maintainers, the rule needs per-path required reviewers in the ruleset,
+   and that change is a repository-settings decision made then. Track paths keep
+   today's rule of one maintainer's approval.
 2. **The AppSpec is core.** A field one track needs is added under that track's RFC and
    reviewed as a core change. The AppSpec is where the two tracks can damage each other,
    and the rule puts the second track's reviewer in the room when it changes.
@@ -214,19 +221,20 @@ Everything else in those RFCs stands: RFC-0001's AppSpec, gap model, plan/apply 
 `verify` invariant and scope, RFC-0002's finding model, and RFC-0003's evidence rule and
 round trip.
 
-### Documents that follow acceptance
+### Documents changed with this RFC
 
-These are documentation and CI changes that put this RFC into effect. They do not need
-an RFC of their own, and they land after this one is accepted:
+These are documentation changes that put this RFC into effect. They need no RFC of
+their own, and they land in the same change that accepts this one:
 
 - `ROADMAP.md` becomes three tables, one for the auditor, one for the generator and one
   for the core, each with Now, Next and Later. The **Explicitly not planned** section
   stays as it is and applies to both.
 - `AGENTS.md` §8 describes the layout that exists, and the core/auditor/generator
   boundary. The sentence forbidding `skills/` goes.
-- `.github/CODEOWNERS` routes the core paths to both tracks' reviewers.
-- `README.md` keeps leading with the auditor. It gains the generator section only when
-  `render` ships, as above.
+- `.github/CODEOWNERS` lists the core paths explicitly (see rule 1 above).
+
+`README.md` does not change. It keeps leading with the auditor, and it gains the
+generator section only when `render` ships, as above.
 
 ## Alternatives considered
 
