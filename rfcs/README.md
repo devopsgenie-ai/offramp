@@ -98,3 +98,4 @@ Every RFC begins with YAML frontmatter. `scripts/check_rfcs.py` validates it.
 | [0002](0002-audit-first.md) | Audit first: a read-only readiness report before any renderer | implemented |
 | [0003](0003-fix-generation.md) | Fix generation: a migration renderer for row-level-security findings | accepted |
 | [0004](0004-functions-that-trust-the-caller.md) | Audit check: database functions that trust a caller-supplied user id | accepted |
+| [0005](0005-two-tracks.md) | Two tracks: an auditor and a generator over one shared core | draft |
