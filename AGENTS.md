@@ -134,14 +134,30 @@ request template asks for this.
 
 ## 8. Repository layout
 
-What exists today:
-
 ```
-rfcs/          the RFC process and all design documents
-scripts/       process tooling (RFC validation)
-.github/       CI, templates
-ROADMAP.md     what we intend to build, in order
+skills/offramp/scripts/   the product: scan, audit, fix, verify, and their modules
+  detect/                 detectors, one per concern, including the migration replay
+  checks/                 audit checks, one per concern
+fixtures/                 golden inputs, their truth.yaml, and expected_* trees
+tests/                    unit and golden tests
+scripts/                  process tooling: the RFC gate, fixture and behaviour checks
+docs/research/            research behind RFC decisions, published in aggregate only
+rfcs/                     the RFC process and all design documents
+.github/                  CI, templates, code owners
+ROADMAP.md                what we intend to build, by track
 ```
 
-What will exist once RFC-0001 is accepted is described in that RFC. Do not create
-`src/`, `schemas/`, `templates/` or `skills/` before then.
+`offramp` has two tracks over one shared core
+([RFC-0005](rfcs/0005-two-tracks.md)). Know which one you are changing:
+
+| Area | What it is | Paths, under `skills/offramp/scripts/` unless stated |
+|---|---|---|
+| **Core** | Shared by both tracks. A change here needs the agreement of both. | `spec.py`, `gaps.py`, `walk.py`, `scan.py`, `report.py`, `rls.py`, `verify.py`, `detect/`; `fixtures/*/expected_bare/`, `truth.yaml`, `gap_count.json`; `scripts/check_fixtures.py`, `scripts/check_rfcs.py` |
+| **Auditor** | `audit` and `fix` | `audit.py`, `audit_report.py`, `findings.py`, `fix*.py`, `checks/`; `fixtures/*/expected_audit/`, `expected_fix/`, `behaviour.yaml`; `scripts/check_fix_behaviour.py`; `docs/research/` |
+| **Generator** | `render`, and later `show`, `apply` and the skill | `render.py`, `render/`, `fixtures/*/expected_render/` |
+
+The AppSpec is core. A field one track needs is added under that track's RFC and
+reviewed as a core change. Every pull request keeps both tracks' golden files green.
+
+`src/`, `schemas/` and `templates/` do not exist. The RFC gate still covers them, so
+creating one needs an accepted RFC like any other implementation change.
