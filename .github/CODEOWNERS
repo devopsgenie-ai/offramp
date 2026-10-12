@@ -12,3 +12,19 @@
 /rfcs/                @ishantdeep-hue @devyansh-dg
 /scripts/             @ishantdeep-hue @devyansh-dg
 /.github/             @ishantdeep-hue @devyansh-dg
+
+# The shared core (RFC-0005). Both tracks stand on these paths, so a change here needs
+# the agreement of both. The ruleset on `main` enforces that while there are two
+# maintainers: an author cannot approve their own pull request, so the other must.
+# Listing them is for the reviewer, who should know a change touches both tracks.
+/skills/offramp/scripts/spec.py     @ishantdeep-hue @devyansh-dg
+/skills/offramp/scripts/gaps.py     @ishantdeep-hue @devyansh-dg
+/skills/offramp/scripts/walk.py     @ishantdeep-hue @devyansh-dg
+/skills/offramp/scripts/scan.py     @ishantdeep-hue @devyansh-dg
+/skills/offramp/scripts/report.py   @ishantdeep-hue @devyansh-dg
+/skills/offramp/scripts/rls.py      @ishantdeep-hue @devyansh-dg
+/skills/offramp/scripts/verify.py   @ishantdeep-hue @devyansh-dg
+/skills/offramp/scripts/detect/     @ishantdeep-hue @devyansh-dg
+/fixtures/*/expected_bare/          @ishantdeep-hue @devyansh-dg
+/fixtures/*/truth.yaml              @ishantdeep-hue @devyansh-dg
+/fixtures/*/gap_count.json          @ishantdeep-hue @devyansh-dg
