@@ -4,7 +4,7 @@ title: "Two tracks: an auditor and a generator over one shared core"
 status: accepted
 authors: [ishantdeep-hue]
 created: 2026-10-10
-updated: 2026-10-10
+updated: 2026-10-13
 ---
 
 > Makes `offramp` two first-class products in one tool. The **auditor** (`audit`, `fix`)
@@ -330,6 +330,17 @@ this RFC moves it closer to applying what it writes.
 1. **Per-track gating.** Should CI gate each track's bare gap count separately, once
    the generator's renderer exists and its count means something? The proposal records
    them and gates only the total.
+
+   **Decided: the total only.** CI keeps gating the total bare gap count, with the rule
+   RFC-0001 set for it. `scripts/check_fixtures.py` prints the count per track so each
+   track can read its own trend, and nothing fails on it. A per-track gate would need a
+   new RFC, made once the generator's renderer exists and its count means something.
 2. **The README's generator section.** Is "once `render` produces a tree a user can
    run" the right trigger? The alternative is to name the generator in the README now,
    as planned work, so the auditor's readers know where the project is going.
+
+   **Decided: once `render` produces a tree a user can run.** This is the rule RFC-0003
+   applied to `fix`: the README documents only what a user can run today. Until then
+   the generator lives in `ROADMAP.md`, which the README already links. A reader who
+   wants to know where the project is going finds it there, and the README promises
+   nothing it cannot keep.
