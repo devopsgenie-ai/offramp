@@ -4,7 +4,7 @@ title: "Two tracks: an auditor and a generator over one shared core"
 status: accepted
 authors: [ishantdeep-hue]
 created: 2026-10-10
-updated: 2026-10-13
+updated: 2026-10-14
 ---
 
 > Makes `offramp` two first-class products in one tool. The **auditor** (`audit`, `fix`)
@@ -185,13 +185,19 @@ It is one ordered table in `gaps.py`. The first matching pattern wins:
 |---|---|---|
 | `datastore.*.table.*.write_scope` | auditor | Only `fix` renders from it. |
 | `credential.*` | both | `credential.committed` links it as a related gap. RFC-0001 requires it for cutover. |
-| `service.*.probes`, `service.*.probes.*` | both | `service.no_health_endpoint` reads it. The generator renders probes from it. |
+| `service.*.probes` | both | `service.no_health_endpoint` reads it. The generator renders probes from it. |
 | `service.*.routes.*` | both | `service.no_health_endpoint` reads it to tell "no route" from "prefix unknown". |
 | `*` | generator | Everything else describes what a deployment needs. |
 
 The rule behind the table is consumption. A gap is `auditor` or `both` exactly when an
 audit check reads it or links it in `related_gaps`. `datastore.*.mode` is therefore
 `generator`: no check reads it, however much it matters to a user who is leaving.
+
+*Corrected 2026-10-14, during implementation:* the table as accepted also listed
+`service.*.probes.*` as `both`. The only gap it can match is `service.<name>.probes.port`,
+and no check reads that: `service.no_health_endpoint` reads the exact id
+`service.<name>.probes`. By the rule above it is `generator`, and no fixture raises it,
+so the stale-pattern test in *Testing* would have failed on it. The pattern is removed.
 
 What the label changes:
 
