@@ -28,3 +28,6 @@
 /fixtures/*/expected_bare/          @ishantdeep-hue @devyansh-dg
 /fixtures/*/truth.yaml              @ishantdeep-hue @devyansh-dg
 /fixtures/*/gap_count.json          @ishantdeep-hue @devyansh-dg
+/scripts/check_fixtures.py          @ishantdeep-hue @devyansh-dg
+/scripts/check_rfcs.py              @ishantdeep-hue @devyansh-dg
+# tests/test_boundary.py holds every area's paths and checks this list against its core.

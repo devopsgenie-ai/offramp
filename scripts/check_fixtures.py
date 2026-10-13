@@ -23,6 +23,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "skills/offramp/scripts"))
 
 from audit import audit_repo  # noqa: E402
+from gaps import track  # noqa: E402
 from rls import leaves_writes_open, public_tables  # noqa: E402
 from scan import scan_repo  # noqa: E402
 from spec import SEVERITY_ORDER  # noqa: E402
@@ -35,6 +36,13 @@ def gap_counts(gaps) -> dict[str, int]:
               for level in SEVERITY_ORDER}
     counts["total"] = len(gaps)
     return counts
+
+
+def track_counts(gaps) -> dict[str, int]:
+    """The bare count per track (RFC-0005). A `both` gap counts toward each, so the two
+    need not sum to the total. Reported only: the total is the gated series."""
+    return {name: sum(1 for gap in gaps if track(gap.id) in (name, "both"))
+            for name in ("auditor", "generator")}
 
 
 def assertion_guard(truth: dict, appspec) -> list[str]:
@@ -253,10 +261,13 @@ def main() -> int:
     failures = 0
     for directory in directories:
         problems = check_fixture(directory)
-        counts = gap_counts(scan_repo(directory).gaps)
+        gaps = scan_repo(directory).gaps
+        counts = gap_counts(gaps)
         status = "ok" if not problems else f"{len(problems)} problem(s)"
         print(f"{directory.name}: {status}  gaps: " + "  ".join(
-            f"{level}={counts[level]}" for level in SEVERITY_ORDER
+            f"{level}={counts[level]}" for level in (*SEVERITY_ORDER, "total")
+        ) + "  by track: " + "  ".join(
+            f"{name}={count}" for name, count in track_counts(gaps).items()
         ))
         for problem in problems:
             print(f"  - {problem}")

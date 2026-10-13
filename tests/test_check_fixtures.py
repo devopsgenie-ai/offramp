@@ -2,12 +2,15 @@ import json
 import shutil
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import yaml
 
 sys.path.insert(0, "scripts")
-from check_fixtures import assertion_guard, check_fixture, gap_counts  # noqa: E402
+from check_fixtures import (  # noqa: E402
+    assertion_guard, check_fixture, gap_counts, main, track_counts,
+)
 from scan import scan_repo  # noqa: E402
 
 FIXTURE = Path("fixtures/emergent-fastapi-mongo")
@@ -24,6 +27,28 @@ def test_gap_counts_cover_every_severity():
     assert counts["total"] == sum(
         counts[level] for level in ("blocking", "important", "cosmetic")
     )
+
+
+def test_track_counts_count_a_both_gap_once_toward_each_track():
+    """RFC-0005: a `both` gap counts toward each track, so the two need not sum to the
+    total."""
+    gaps = [SimpleNamespace(id=gap_id) for gap_id in (
+        "datastore.supabase.table.public.notes.write_scope",   # auditor
+        "credential.backend.env.JWT_SECRET",                   # both
+        "delivery.image_registry",                             # generator
+        "datastore.mongodb.mode",                              # generator
+    )]
+    assert track_counts(gaps) == {"auditor": 2, "generator": 3}
+
+
+def test_the_summary_prints_the_count_per_track(capsys):
+    assert main() == 0
+    counts = track_counts(scan_repo(FIXTURE).gaps)
+    line = next(line for line in capsys.readouterr().out.splitlines()
+                if line.startswith(f"{FIXTURE.name}:"))
+    assert f"total={len(scan_repo(FIXTURE).gaps)}" in line
+    assert f"auditor={counts['auditor']}" in line
+    assert f"generator={counts['generator']}" in line
 
 
 def test_the_recorded_gap_count_matches_the_current_run():

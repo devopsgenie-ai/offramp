@@ -19,6 +19,22 @@ from spec import AppSpec, Gap, gap_id
 #: (RFC-0003).
 NEVER_ANSWERABLE = ("/source", "/services/*/name", "/datastores/*/schema/tables/*/name")
 
+#: Which track consumes a gap (RFC-0005), by id pattern; the first match wins. A gap is
+#: `auditor` or `both` exactly when an audit check reads it or links it in
+#: `related_gaps`. Derived, never stored, so it cannot disagree with the id.
+TRACKS = (
+    ("datastore.*.table.*.write_scope", "auditor"),  # only `fix` renders from it
+    ("credential.*", "both"),                        # credential.committed links it
+    ("service.*.probes", "both"),                    # service.no_health_endpoint reads it
+    ("service.*.routes.*", "both"),                  # ...to tell "no route" from "unknown"
+    ("*", "generator"),
+)
+
+
+def track(gap_id: str) -> str:
+    """`auditor`, `generator` or `both`: the track that consumes this gap."""
+    return next(label for pattern, label in TRACKS if fnmatch.fnmatchcase(gap_id, pattern))
+
 
 def _delivery_gap(field: str, question: str, proposed, severity="blocking") -> Gap:
     return Gap(
